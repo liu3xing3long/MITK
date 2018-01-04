@@ -31,13 +31,13 @@ See LICENSE.txt or http://www.mitk.org for details.
 typedef itk::Image< double, 3 >                 FloatImageType;
 typedef itk::Image< unsigned char, 3 >          MaskImageType;
 
-static vector<double> splitDouble(string str, char delimiter) {
-  vector<double> internal;
-  stringstream ss(str); // Turn the string into a stream.
-  string tok;
+static std::vector<double> splitDouble(std::string str, char delimiter) {
+  std::vector<double> internal;
+  std::stringstream ss(str); // Turn the string into a stream.
+  std::string tok;
   double val;
-  while(getline(ss, tok, delimiter)) {
-    stringstream s2(tok);
+  while (std::getline(ss, tok, delimiter)) {
+    std::stringstream s2(tok);
     s2 >> val;
     internal.push_back(val);
   }
@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
   parser.setDescription("Calculates different global statistics for a given segmentation / image combination");
   parser.setContributor("MBI");
 
-  map<string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
+  std::map<std::string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
 
   if (parsedArgs.size()==0)
   {
@@ -82,10 +82,8 @@ int main(int argc, char* argv[])
 
   MITK_INFO << "Version: "<< 1.3;
 
-  bool useCooc = parsedArgs.count("cooccurence");
-
-  mitk::Image::Pointer image = mitk::IOUtil::LoadImage(parsedArgs["image"].ToString());
-  mitk::Image::Pointer mask = mitk::IOUtil::LoadImage(parsedArgs["mask"].ToString());
+  mitk::Image::Pointer image = dynamic_cast<mitk::Image*>(mitk::IOUtil::Load(parsedArgs["image"].ToString())[0].GetPointer());
+  mitk::Image::Pointer mask = dynamic_cast<mitk::Image*>(mitk::IOUtil::Load(parsedArgs["mask"].ToString())[0].GetPointer());
 
   bool fixDifferentSpaces = parsedArgs.count("same-space");
   if ( ! mitk::Equal(mask->GetGeometry(0)->GetOrigin(), image->GetGeometry(0)->GetOrigin()))
@@ -149,7 +147,7 @@ int main(int argc, char* argv[])
   {
     auto ranges = splitDouble(parsedArgs["cooccurence"].ToString(),';');
 
-    for (int i = 0; i < ranges.size(); ++i)
+    for (std::size_t i = 0; i < ranges.size(); ++i)
     {
       MITK_INFO << "Start calculating coocurence with range " << ranges[i] << "....";
       mitk::GIFCooccurenceMatrix::Pointer coocCalculator = mitk::GIFCooccurenceMatrix::New();
@@ -168,7 +166,7 @@ int main(int argc, char* argv[])
   {
     auto ranges = splitDouble(parsedArgs["run-length"].ToString(),';');
 
-    for (int i = 0; i < ranges.size(); ++i)
+    for (std::size_t i = 0; i < ranges.size(); ++i)
     {
       MITK_INFO << "Start calculating run-length with number of bins " << ranges[i] << "....";
       mitk::GIFGrayLevelRunLength::Pointer calculator = mitk::GIFGrayLevelRunLength::New();
@@ -179,7 +177,7 @@ int main(int argc, char* argv[])
       MITK_INFO << "Finished calculating run-length with number of bins " << ranges[i] << "....";
     }
   }
-  for (int i = 0; i < stats.size(); ++i)
+  for (std::size_t i = 0; i < stats.size(); ++i)
   {
     std::cout << stats[i].first << " - " << stats[i].second <<std::endl;
   }
@@ -191,7 +189,7 @@ int main(int argc, char* argv[])
     {
       output << "Description" << ";";
     }
-    for (int i = 0; i < stats.size(); ++i)
+    for (std::size_t i = 0; i < stats.size(); ++i)
     {
       output << stats[i].first << ";";
     }
@@ -201,7 +199,7 @@ int main(int argc, char* argv[])
   {
     output << parsedArgs["description"].ToString() << ";";
   }
-  for (int i = 0; i < stats.size(); ++i)
+  for (std::size_t i = 0; i < stats.size(); ++i)
   {
     output << stats[i].second << ";";
   }

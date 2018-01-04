@@ -29,17 +29,15 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 typedef itk::MutexLockHolder<itk::FastMutexLock> MutexLockHolder;
 
-
 mitk::VirtualTrackingDevice::VirtualTrackingDevice() : mitk::TrackingDevice(),
-m_AllTools(), m_ToolsMutex(NULL), m_MultiThreader(NULL), m_ThreadID(-1), m_RefreshRate(100), m_NumberOfControlPoints(20), m_GaussianNoiseEnabled(false),
+m_AllTools(), m_ToolsMutex(nullptr), m_MultiThreader(nullptr), m_ThreadID(-1), m_RefreshRate(100), m_NumberOfControlPoints(20), m_GaussianNoiseEnabled(false),
 m_MeanDistributionParam(0.0), m_DeviationDistributionParam(1.0)
 {
   m_Data = mitk::VirtualTrackerTypeInformation::GetDeviceDataVirtualTracker();
   m_Bounds[0] = m_Bounds[2] = m_Bounds[4] = -400.0;  // initialize bounds to -400 ... +400 (mm) cube
-  m_Bounds[1] = m_Bounds[3] = m_Bounds[5] =  400.0;
+  m_Bounds[1] = m_Bounds[3] = m_Bounds[5] = 400.0;
   m_ToolsMutex = itk::FastMutexLock::New();
 }
-
 
 mitk::VirtualTrackingDevice::~VirtualTrackingDevice()
 {
@@ -55,17 +53,16 @@ mitk::VirtualTrackingDevice::~VirtualTrackingDevice()
   if (m_MultiThreader.IsNotNull() && (m_ThreadID != -1))
   {
     m_MultiThreader->TerminateThread(m_ThreadID);
-    m_MultiThreader = NULL;
+    m_MultiThreader = nullptr;
   }
   m_AllTools.clear();
 }
-
 
 mitk::TrackingTool* mitk::VirtualTrackingDevice::AddTool(const char* toolName)
 {
   //if (this->GetState() == Tracking)
   //{
-  //  return NULL;
+  //  return nullptr;
   //}
   mitk::VirtualTrackingTool::Pointer t = mitk::VirtualTrackingTool::New();
   t->SetToolName(toolName);
@@ -76,7 +73,6 @@ mitk::TrackingTool* mitk::VirtualTrackingDevice::AddTool(const char* toolName)
   return t;
 }
 
-
 bool mitk::VirtualTrackingDevice::StartTracking()
 {
   if (this->GetState() != Ready)
@@ -85,8 +81,6 @@ bool mitk::VirtualTrackingDevice::StartTracking()
   this->m_StopTrackingMutex->Lock();
   this->m_StopTracking = false;
   this->m_StopTrackingMutex->Unlock();
-
-  // m_TrackingFinishedMutex->Unlock(); causes bug-18879 // transfer the execution rights to tracking thread
 
   mitk::IGTTimeStamp::GetInstance()->Start(this);
 
@@ -99,7 +93,6 @@ bool mitk::VirtualTrackingDevice::StartTracking()
   return true;
 }
 
-
 bool mitk::VirtualTrackingDevice::StopTracking()
 {
   if (this->GetState() == Tracking) // Only if the object is in the correct state
@@ -107,15 +100,16 @@ bool mitk::VirtualTrackingDevice::StopTracking()
     m_StopTrackingMutex->Lock();  // m_StopTracking is used by two threads, so we have to ensure correct thread handling
     m_StopTracking = true;
     m_StopTrackingMutex->Unlock();
+
+    m_TrackingFinishedMutex->Lock();
     this->SetState(Ready);
+    m_TrackingFinishedMutex->Unlock();
   }
 
   mitk::IGTTimeStamp::GetInstance()->Stop(this);
-  // m_TrackingFinishedMutex->Lock(); causes bug-18879
 
   return true;
 }
-
 
 unsigned int mitk::VirtualTrackingDevice::GetToolCount() const
 {
@@ -123,31 +117,30 @@ unsigned int mitk::VirtualTrackingDevice::GetToolCount() const
   return static_cast<unsigned int>(this->m_AllTools.size());
 }
 
-
 mitk::TrackingTool* mitk::VirtualTrackingDevice::GetTool(unsigned int toolNumber) const
 {
   MutexLockHolder lock(*m_ToolsMutex); // lock and unlock the mutex
-  if ( toolNumber < m_AllTools.size())
+  if (toolNumber < m_AllTools.size())
     return this->m_AllTools.at(toolNumber);
-  return NULL;
+  return nullptr;
 }
-
 
 bool mitk::VirtualTrackingDevice::OpenConnection()
 {
   if (m_NumberOfControlPoints < 1)
-    {mitkThrowException(mitk::IGTException) << "to few control points for spline interpolation";}
-  srand(time(NULL)); //Init random number generator
+  {
+    mitkThrowException(mitk::IGTException) << "to few control points for spline interpolation";
+  }
+  srand(time(nullptr)); //Init random number generator
 
   this->SetState(Ready);
   return true;
 }
 
-
-void mitk::VirtualTrackingDevice::InitializeSpline( mitk::VirtualTrackingTool* t )
+void mitk::VirtualTrackingDevice::InitializeSpline(mitk::VirtualTrackingTool* t)
 {
-  if (t == NULL)
-  return;
+  if (t == nullptr)
+    return;
 
   typedef mitk::VirtualTrackingTool::SplineType SplineType;
   /* create random control points */
@@ -178,40 +171,36 @@ void mitk::VirtualTrackingDevice::InitializeSpline( mitk::VirtualTrackingTool* t
   t->SetSplineLength(length);
 }
 
-
 bool mitk::VirtualTrackingDevice::CloseConnection()
 {
   bool returnValue = true;
-  if(this->GetState() == Setup)
+  if (this->GetState() == Setup)
     return true;
 
   this->SetState(Setup);
   return returnValue;
 }
 
-
 mitk::ScalarType mitk::VirtualTrackingDevice::GetSplineChordLength(unsigned int idx)
 {
   mitk::VirtualTrackingTool* t = this->GetInternalTool(idx);
-  if (t != NULL)
+  if (t != nullptr)
     return t->GetSplineLength();
   else
     throw std::invalid_argument("invalid index");
 }
-
 
 void mitk::VirtualTrackingDevice::SetToolSpeed(unsigned int idx, mitk::ScalarType roundsPerSecond)
 {
   if (roundsPerSecond < 0.0001)
     throw std::invalid_argument("Minimum tool speed is 0.0001 rounds per second");
 
-    mitk::VirtualTrackingTool* t = this->GetInternalTool(idx);
-    if (t != NULL)
-      t->SetVelocity(roundsPerSecond);
-    else
-      throw std::invalid_argument("invalid index");
+  mitk::VirtualTrackingTool* t = this->GetInternalTool(idx);
+  if (t != nullptr)
+    t->SetVelocity(roundsPerSecond);
+  else
+    throw std::invalid_argument("invalid index");
 }
-
 
 mitk::VirtualTrackingTool* mitk::VirtualTrackingDevice::GetInternalTool(unsigned int idx)
 {
@@ -219,108 +208,94 @@ mitk::VirtualTrackingTool* mitk::VirtualTrackingDevice::GetInternalTool(unsigned
   if (idx < m_AllTools.size())
     return m_AllTools.at(idx);
   else
-    return NULL;
+    return nullptr;
 }
-
 
 void mitk::VirtualTrackingDevice::TrackTools()
 {
-  try
+  /* lock the TrackingFinishedMutex to signal that the execution rights are now transfered to the tracking thread */
+  MutexLockHolder trackingFinishedLockHolder(*m_TrackingFinishedMutex); // keep lock until end of scope
+
+  if (this->GetState() != Tracking)
+    return;
+
+  bool localStopTracking;       // Because m_StopTracking is used by two threads, access has to be guarded by a mutex. To minimize thread locking, a local copy is used here
+
+  this->m_StopTrackingMutex->Lock();  // update the local copy of m_StopTracking
+  localStopTracking = this->m_StopTracking;
+  this->m_StopTrackingMutex->Unlock();
+
+  mitk::ScalarType t = 0.0;
+  while ((this->GetState() == Tracking) && (localStopTracking == false))
   {
-    bool localStopTracking;       // Because m_StopTracking is used by two threads, access has to be guarded by a mutex. To minimize thread locking, a local copy is used here
-
-    this->m_StopTrackingMutex->Lock();  // update the local copy of m_StopTracking
-    localStopTracking = this->m_StopTracking;
-
-    /* lock the TrackingFinishedMutex to signal that the execution rights are now transfered to the tracking thread */
-    if (!localStopTracking)
+    //for (ToolContainer::iterator itAllTools = m_AllTools.begin(); itAllTools != m_AllTools.end(); itAllTools++)
+    for (unsigned int i = 0; i < this->GetToolCount(); ++i)  // use mutexed methods to access tool container
     {
-      // m_TrackingFinishedMutex->Lock(); causes bug-18879
-    }
-    this->m_StopTrackingMutex->Unlock();
+      mitk::VirtualTrackingTool::Pointer currentTool = this->GetInternalTool(i);
+      mitk::VirtualTrackingTool::SplineType::PointType pos;
+      /* calculate tool position with spline interpolation */
+      pos = currentTool->GetSpline()->EvaluateSpline(t);
+      mitk::Point3D mp;
+      mitk::itk2vtk(pos, mp); // convert from SplineType::PointType to mitk::Point3D
 
-    mitk::ScalarType t = 0.0;
-    while ((this->GetState() == Tracking) && (localStopTracking == false))
-    {
-      //for (ToolContainer::iterator itAllTools = m_AllTools.begin(); itAllTools != m_AllTools.end(); itAllTools++)
-      for (unsigned int i = 0; i < this->GetToolCount(); ++i)  // use mutexed methods to access tool container
+      //Add Gaussian Noise to Tracking Coordinates if enabled
+      if (this->m_GaussianNoiseEnabled)
       {
-        mitk::VirtualTrackingTool::Pointer currentTool = this->GetInternalTool(i);
-        mitk::VirtualTrackingTool::SplineType::PointType pos;
-        /* calculate tool position with spline interpolation */
-        pos = currentTool->GetSpline()->EvaluateSpline(t);
-        mitk::Point3D mp;
-        mitk::itk2vtk(pos, mp); // convert from SplineType::PointType to mitk::Point3D
-
-    //Add Gaussian Noise to Tracking Coordinates if enabled
-    if (this->m_GaussianNoiseEnabled)
-    {
-      std::random_device rd;
-      std::mt19937 generator(rd());
-      std::normal_distribution<double> dist(this->m_MeanDistributionParam, this->m_DeviationDistributionParam);
-      double noise = dist(generator);
-      mp = mp + noise;
-    }
-
-        currentTool->SetPosition(mp);
-        // Currently, a constant speed is used. TODO: use tool velocity setting
-        t += 0.001;
-        if (t >= 1.0)
-          t = 0.0;
-
-        mitk::Quaternion quat;
-        /* fix quaternion rotation */
-        quat.x() = 0.0;
-        quat.y() = 0.0;
-        quat.z() = 0.0;
-        quat.r() = 1.0;
-        quat.normalize();
-        currentTool->SetOrientation(quat);
-        // TODO: rotate once per cycle around a fixed rotation vector
-
-        currentTool->SetTrackingError( 2 * (rand() / (RAND_MAX + 1.0)));  // tracking error in 0 .. 2 Range
-        currentTool->SetDataValid(true);
-        currentTool->Modified();
+        std::random_device rd;
+        std::mt19937 generator(rd());
+        std::normal_distribution<double> dist(this->m_MeanDistributionParam, this->m_DeviationDistributionParam);
+        double noise = dist(generator);
+        mp = mp + noise;
       }
-      itksys::SystemTools::Delay(m_RefreshRate);
-      /* Update the local copy of m_StopTracking */
-      this->m_StopTrackingMutex->Lock();
-      localStopTracking = m_StopTracking;
-      this->m_StopTrackingMutex->Unlock();
-    } // tracking ends if we pass this line
 
-    // m_TrackingFinishedMutex->Unlock(); causes bug-18879 // transfer control back to main thread
-  }
-  catch(...)
-  {
-    // m_TrackingFinishedMutex->Unlock(); causes bug-18879
-    this->StopTracking();
-    mitkThrowException(mitk::IGTException) << "Error while trying to track tools. Thread stopped.";
-  }
+      currentTool->SetPosition(mp);
+      // Currently, a constant speed is used. TODO: use tool velocity setting
+      t += 0.001;
+      if (t >= 1.0)
+        t = 0.0;
+
+      mitk::Quaternion quat;
+      /* fix quaternion rotation */
+      quat.x() = 0.0;
+      quat.y() = 0.0;
+      quat.z() = 0.0;
+      quat.r() = 1.0;
+      quat.normalize();
+      currentTool->SetOrientation(quat);
+      // TODO: rotate once per cycle around a fixed rotation vector
+
+      currentTool->SetTrackingError(2 * (rand() / (RAND_MAX + 1.0)));  // tracking error in 0 .. 2 Range
+      currentTool->SetDataValid(true);
+      currentTool->Modified();
+    }
+    itksys::SystemTools::Delay(m_RefreshRate);
+    /* Update the local copy of m_StopTracking */
+    this->m_StopTrackingMutex->Lock();
+    localStopTracking = m_StopTracking;
+    this->m_StopTrackingMutex->Unlock();
+  } // tracking ends if we pass this line
 }
-
 
 ITK_THREAD_RETURN_TYPE mitk::VirtualTrackingDevice::ThreadStartTracking(void* pInfoStruct)
 {
   /* extract this pointer from Thread Info structure */
   struct itk::MultiThreader::ThreadInfoStruct * pInfo = (struct itk::MultiThreader::ThreadInfoStruct*)pInfoStruct;
-  if (pInfo == NULL)
+  if (pInfo == nullptr)
   {
     return ITK_THREAD_RETURN_VALUE;
   }
-  if (pInfo->UserData == NULL)
+  if (pInfo->UserData == nullptr)
   {
     return ITK_THREAD_RETURN_VALUE;
   }
   VirtualTrackingDevice *trackingDevice = static_cast<VirtualTrackingDevice*>(pInfo->UserData);
 
-  if (trackingDevice != NULL)
+  if (trackingDevice != nullptr)
     trackingDevice->TrackTools();
 
   trackingDevice->m_ThreadID = -1; // reset thread ID because we end the thread here
   return ITK_THREAD_RETURN_VALUE;
 }
-
 
 mitk::VirtualTrackingDevice::ControlPointType mitk::VirtualTrackingDevice::GetRandomPoint()
 {
@@ -331,7 +306,6 @@ mitk::VirtualTrackingDevice::ControlPointType mitk::VirtualTrackingDevice::GetRa
 
   return pos;
 }
-
 
 void mitk::VirtualTrackingDevice::EnableGaussianNoise()
 {

@@ -135,7 +135,7 @@ void mitk::OpenCVVideoSource::FetchFrame()
       {
         double framePos = this->GetVideoCaptureProperty(CV_CAP_PROP_POS_AVI_RATIO);
         MITK_DEBUG << "End of video file found. framePos: " << framePos;
-        if(m_RepeatVideo &&  framePos >= 0.99)
+        if(m_RepeatVideo && framePos >= 0.99)
         {
           MITK_DEBUG << "Restarting video file playback.";
           this->SetVideoCaptureProperty(CV_CAP_PROP_POS_AVI_RATIO, 0);
@@ -220,6 +220,7 @@ void mitk::OpenCVVideoSource::StartCapturing()
 
 void mitk::OpenCVVideoSource::StopCapturing()
 {
+  m_CapturePaused = false;
   m_CapturingInProcess = false;
 }
 
@@ -275,7 +276,7 @@ void mitk::OpenCVVideoSource::GetCurrentFrameAsItkHSVPixelImage(HSVPixelImageTyp
 
   // Prepare iteration
   HSVConstIteratorType itImage( Image, Image->GetLargestPossibleRegion());
-  itImage.Begin();
+  itImage.GoToBegin();
   HSVPixelType pixel;
   int rowsize = 3 * m_CaptureWidth;
 
@@ -391,6 +392,7 @@ void mitk::OpenCVVideoSource::Reset()
 {
   // set capturing to false
   this->StopCapturing();
+  this->m_FrameCount = 0;
   if(m_VideoCapture)
     cvReleaseCapture(&m_VideoCapture);
   m_VideoCapture = nullptr;

@@ -121,7 +121,7 @@ private:
             errorList.push_back(word);
           }
 
-          pch = std::strtok(NULL, delimiters);
+          pch = std::strtok(nullptr, delimiters);
         }
       }
 
@@ -178,16 +178,16 @@ private:
     }
   }
 
-  std::auto_ptr<SpellCheckImpl> m_spellCheckService;
+  std::unique_ptr<SpellCheckImpl> m_spellCheckService;
   ServiceRegistration<ISpellCheckService> m_spellCheckReg;
 
   ModuleContext* m_context;
-  std::auto_ptr<ServiceTracker<IDictionaryService> > m_tracker;
+  std::unique_ptr<ServiceTracker<IDictionaryService> > m_tracker;
 
 public:
 
   Activator()
-    : m_context(NULL)
+    : m_context(nullptr)
   {}
 
   /**

@@ -20,7 +20,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 // Qmitk
 #include "QmitkMITKIGTNavigationToolManagerView.h"
-#include "QmitkStdMultiWidget.h"
 
 // MITK
 #include <usGetModuleContext.h>
@@ -28,33 +27,30 @@ See LICENSE.txt or http://www.mitk.org for details.
 // Qt
 #include <QMessageBox>
 
-
-
 const std::string QmitkMITKIGTNavigationToolManagerView::VIEW_ID = "org.mitk.views.mitkigtnavigationtoolmanager";
 
 QmitkMITKIGTNavigationToolManagerView::QmitkMITKIGTNavigationToolManagerView()
-: QmitkAbstractView()
-, m_Controls( 0 )
+  : QmitkAbstractView()
+  , m_Controls(0)
 {
 }
 
 QmitkMITKIGTNavigationToolManagerView::~QmitkMITKIGTNavigationToolManagerView()
 {
-  for(int i=0; i < m_AllStoragesHandledByThisWidget.size(); i++)
-    m_AllStoragesHandledByThisWidget.at(i)->UnRegisterMicroservice();
+  for (auto storage : m_AllStoragesHandledByThisWidget)
+    storage->UnRegisterMicroservice();
 }
 
-
-void QmitkMITKIGTNavigationToolManagerView::CreateQtPartControl( QWidget *parent )
+void QmitkMITKIGTNavigationToolManagerView::CreateQtPartControl(QWidget *parent)
 {
   // build up qt view, unless already done
-  if ( !m_Controls )
+  if (!m_Controls)
   {
     // create GUI widgets from the Qt Designer's .ui file
     m_Controls = new Ui::QmitkMITKIGTNavigationToolManagerViewControls;
-    m_Controls->setupUi( parent );
-    connect( (QObject*)(m_Controls->m_toolManagerWidget), SIGNAL(NewStorageAdded(mitk::NavigationToolStorage::Pointer,std::string)), this, SLOT(NewStorageByWidget(mitk::NavigationToolStorage::Pointer,std::string)) );
-    connect( (QObject*)(m_Controls->m_ToolStorageListWidget), SIGNAL(NavigationToolStorageSelected(mitk::NavigationToolStorage::Pointer)), this, SLOT(ToolStorageSelected(mitk::NavigationToolStorage::Pointer)) );
+    m_Controls->setupUi(parent);
+    connect((QObject*)(m_Controls->m_toolManagerWidget), SIGNAL(NewStorageAdded(mitk::NavigationToolStorage::Pointer, std::string)), this, SLOT(NewStorageByWidget(mitk::NavigationToolStorage::Pointer, std::string)));
+    connect((QObject*)(m_Controls->m_ToolStorageListWidget), SIGNAL(NavigationToolStorageSelected(mitk::NavigationToolStorage::Pointer)), this, SLOT(ToolStorageSelected(mitk::NavigationToolStorage::Pointer)));
   }
   m_Controls->m_toolManagerWidget->Initialize(this->GetDataStorage());
 }
@@ -64,7 +60,7 @@ void QmitkMITKIGTNavigationToolManagerView::SetFocus()
   m_Controls->m_ToolStorageListWidget->setFocus();
 }
 
-void QmitkMITKIGTNavigationToolManagerView::NewStorageByWidget(mitk::NavigationToolStorage::Pointer storage,std::string storageName)
+void QmitkMITKIGTNavigationToolManagerView::NewStorageByWidget(mitk::NavigationToolStorage::Pointer storage, std::string storageName)
 {
   storage->RegisterAsMicroservice(storageName);
   m_AllStoragesHandledByThisWidget.push_back(storage);
@@ -73,12 +69,10 @@ void QmitkMITKIGTNavigationToolManagerView::NewStorageByWidget(mitk::NavigationT
 void QmitkMITKIGTNavigationToolManagerView::ToolStorageSelected(mitk::NavigationToolStorage::Pointer storage)
 {
   if (storage.IsNull()) //no storage selected
-      {
-        //reset everything
-        return;
-      }
+  {
+    //reset everything
+    return;
+  }
 
   this->m_Controls->m_toolManagerWidget->LoadStorage(storage);
 }
-
-

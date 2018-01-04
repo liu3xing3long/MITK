@@ -25,6 +25,8 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <Poco/Path.h>
 #include <QSettings>
 
+#include <QmitkIGTCommonHelper.h>
+
 const std::string QmitkMicronTrackerWidget::VIEW_ID = "org.mitk.views.NDIMicronTrackerWidget";
 
 QmitkMicronTrackerWidget::QmitkMicronTrackerWidget(QWidget* parent, Qt::WindowFlags f)
@@ -100,9 +102,9 @@ mitk::TrackingDevice::Pointer QmitkMicronTrackerWidget::ConstructTrackingDevice(
 void QmitkMicronTrackerWidget::StoreUISettings()
 {
   std::string id = "org.mitk.modules.igt.ui.trackingdeviceconfigurationwidget";
-  if (this->GetPeristenceService()) // now save the settings using the persistence service
+  if (this->GetPersistenceService()) // now save the settings using the persistence service
   {
-    mitk::PropertyList::Pointer propList = this->GetPeristenceService()->GetPropertyList(id);
+    mitk::PropertyList::Pointer propList = this->GetPersistenceService()->GetPropertyList(id);
     propList->Set("MTCalibrationFile", m_MTCalibrationFile);
   }
   else // QSettings as a fallback if the persistence service is not available
@@ -118,9 +120,9 @@ void QmitkMicronTrackerWidget::LoadUISettings()
 {
   std::string id = "org.mitk.modules.igt.ui.trackingdeviceconfigurationwidget";
 
-  if (this->GetPeristenceService())
+  if (this->GetPersistenceService())
   {
-    mitk::PropertyList::Pointer propList = this->GetPeristenceService()->GetPropertyList(id);
+    mitk::PropertyList::Pointer propList = this->GetPersistenceService()->GetPropertyList(id);
     if (propList.IsNull())
     {
       MITK_ERROR << "Property list for this UI (" << id << ") is not available, could not load UI settings!"; return;
@@ -147,10 +149,11 @@ bool QmitkMicronTrackerWidget::IsDeviceInstalled()
 
 void QmitkMicronTrackerWidget::SetMTCalibrationFileClicked()
 {
-  std::string filename = QFileDialog::getOpenFileName(NULL, tr("Open Calibration File"), "/", "*.*").toLatin1().data();
+  std::string filename = QFileDialog::getOpenFileName(nullptr, tr("Open Calibration File"), QmitkIGTCommonHelper::GetLastFileLoadPath(), "*.*").toLatin1().data();
   if (filename == "") { return; }
   else
   {
+    QmitkIGTCommonHelper::SetLastFileLoadPathByFileName(QString::fromStdString(filename));
     m_MTCalibrationFile = filename;
     Poco::Path myPath = Poco::Path(m_MTCalibrationFile.c_str());
     m_Controls->m_MTCalibrationFile->setText("Calibration File: " + QString(myPath.getFileName().c_str()));

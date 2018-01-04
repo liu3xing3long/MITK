@@ -54,29 +54,12 @@ if(NOT DEFINED ITK_DIR)
     )
   endif()
 
-  set(vcl_constexpr_patch)
-  if(GCC_VERSION VERSION_LESS 4.8 AND GCC_VERSION VERSION_GREATER 4)
-    set(vcl_constexpr_patch
-      COMMAND ${PATCH_COMMAND} -N -p1 -i ${CMAKE_CURRENT_LIST_DIR}/ITK-4.7.1-gcc-4.6.patch
-    )
-  endif()
-
-  # this will be in ITK 4.8, see https://issues.itk.org/jira/browse/ITK-3361
-  set(vcl_gcc5_patch)
-  if(GCC_VERSION VERSION_GREATER 4)
-    set(vcl_gcc5_patch
-      COMMAND ${PATCH_COMMAND} -N -p1 -i ${CMAKE_CURRENT_LIST_DIR}/ITK-4.7.1-gcc-5.patch
-    )
-  endif()
-
   ExternalProject_Add(${proj}
      LIST_SEPARATOR ${sep}
-     URL ${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/InsightToolkit-4.7.1-20c0592.tar.gz
-     URL_MD5 f778a5f0e297c06dc629c33ec45733dc
+     URL ${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/InsightToolkit-4.12.2.tar.xz
+     URL_MD5 cee6436c1341db3813a85955c281e6a9
      # work with external GDCM
-     PATCH_COMMAND ${PATCH_COMMAND} -N -p1 -i ${CMAKE_CURRENT_LIST_DIR}/ITK-4.7.1.patch
-                   ${vcl_constexpr_patch}
-                   ${vcl_gcc5_patch}
+     # PATCH_COMMAND ${PATCH_COMMAND} -N -p1 -i ${CMAKE_CURRENT_LIST_DIR}/ITK-4.11.0.patch
      CMAKE_GENERATOR ${gen}
      CMAKE_ARGS
        ${ep_common_args}
@@ -84,6 +67,8 @@ if(NOT DEFINED ITK_DIR)
        -DBUILD_EXAMPLES:BOOL=OFF
        -DITK_USE_SYSTEM_GDCM:BOOL=ON
        -DGDCM_DIR:PATH=${GDCM_DIR}
+       -DITK_USE_SYSTEM_HDF5:BOOL=ON
+       -DHDF5_DIR:PATH=${HDF5_DIR}
      CMAKE_CACHE_ARGS
        ${ep_common_cache_args}
      CMAKE_CACHE_DEFAULT_ARGS

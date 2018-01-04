@@ -16,9 +16,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 
 #include "org_mitk_gui_qt_dosevisualization_Activator.h"
-
-#include <QtPlugin>
-
 #include "RTDoseVisualizer.h"
 #include "RTUIPreferencePage.h"
 #include "DoseVisualizationPreferencePage.h"
@@ -40,7 +37,7 @@ namespace mitk {
   {
     Q_UNUSED(context);
 
-    m_Context = NULL;
+    m_Context = nullptr;
   }
 
   ctkPluginContext* org_mitk_gui_qt_dosevisualization_Activator::GetContext()
@@ -49,7 +46,3 @@ namespace mitk {
   }
 
 }
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-  Q_EXPORT_PLUGIN2(org_mitk_gui_qt_dosevisualization, mitk::org_mitk_gui_qt_dosevisualization_Activator)
-#endif

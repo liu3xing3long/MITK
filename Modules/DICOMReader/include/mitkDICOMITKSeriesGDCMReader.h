@@ -199,21 +199,22 @@ class MITKDICOMREADER_EXPORT DICOMITKSeriesGDCMReader : public DICOMFileReader
     mitkCloneMacro( DICOMITKSeriesGDCMReader );
     itkFactorylessNewMacro( DICOMITKSeriesGDCMReader );
     mitkNewMacro1Param( DICOMITKSeriesGDCMReader, unsigned int );
+    mitkNewMacro2Param( DICOMITKSeriesGDCMReader, unsigned int, bool );
 
     /**
       \brief Runs the sorting / splitting process described in \ref DICOMITKSeriesGDCMReader_LoadingStrategy.
       Method required by DICOMFileReader.
     */
-    virtual void AnalyzeInputFiles() override;
+    void AnalyzeInputFiles() override;
 
     // void AllocateOutputImages();
     /**
       \brief Loads images using itk::ImageSeriesReader, potentially applies shearing to correct gantry tilt.
     */
-    virtual bool LoadImages() override;
+    bool LoadImages() override;
 
     // re-implemented from super-class
-    virtual bool CanHandleFile(const std::string& filename) override;
+    bool CanHandleFile(const std::string& filename) override;
 
     /**
       \brief Add an element to the sorting procedure described in \ref DICOMITKSeriesGDCMReader_LoadingStrategy.
@@ -246,18 +247,39 @@ class MITKDICOMREADER_EXPORT DICOMITKSeriesGDCMReader : public DICOMFileReader
     */
     void SetToleratedOriginOffset(double millimeters = 0.005) const;
 
+    /**
+    \brief Ignore all dicom tags that are non-essential for simple 3D volume import.
+    */
+    void SetSimpleVolumeReading(bool read)
+    {
+      m_SimpleVolumeReading = read;
+    };
+
+    /**
+    \brief Ignore all dicom tags that are non-essential for simple 3D volume import.
+    */
+    bool GetSimpleVolumeReading()
+    {
+      return m_SimpleVolumeReading;
+    };
+
     double GetToleratedOriginError() const;
     bool IsToleratedOriginOffsetAbsolute() const;
 
     double GetDecimalPlacesForOrientation() const;
 
-    virtual bool operator==(const DICOMFileReader& other) const override;
+    bool operator==(const DICOMFileReader& other) const override;
 
-    virtual DICOMTagList GetTagsOfInterest() const override;
+    DICOMTagPathList GetTagsOfInterest() const override;
+
+    static int GetDefaultDecimalPlacesForOrientation()
+    {
+      return m_DefaultDecimalPlacesForOrientation; 
+    }
 
   protected:
 
-    virtual void InternalPrintConfiguration(std::ostream& os) const override;
+    void InternalPrintConfiguration(std::ostream& os) const override;
 
     /// \brief Return active C locale
   static std::string GetActiveLocale();
@@ -272,20 +294,15 @@ class MITKDICOMREADER_EXPORT DICOMITKSeriesGDCMReader : public DICOMFileReader
     */
     void PopLocale() const;
 
-    DICOMITKSeriesGDCMReader(unsigned int decimalPlacesForOrientation = 5);
-    virtual ~DICOMITKSeriesGDCMReader();
+    const static int m_DefaultDecimalPlacesForOrientation = 5;
+
+    DICOMITKSeriesGDCMReader(unsigned int decimalPlacesForOrientation = m_DefaultDecimalPlacesForOrientation, bool simpleVolumeImport = false);
+    ~DICOMITKSeriesGDCMReader() override;
 
     DICOMITKSeriesGDCMReader(const DICOMITKSeriesGDCMReader& other);
     DICOMITKSeriesGDCMReader& operator=(const DICOMITKSeriesGDCMReader& other);
 
-    /// \brief See \ref DICOMITKSeriesGDCMReader_Internals
-  static DICOMDatasetList ToDICOMDatasetList(const DICOMGDCMImageFrameList& input);
-    /// \brief See \ref DICOMITKSeriesGDCMReader_Internals
-  static DICOMGDCMImageFrameList FromDICOMDatasetList(const DICOMDatasetList& input);
-    /// \brief See \ref DICOMITKSeriesGDCMReader_Internals
-  static DICOMImageFrameList ToDICOMImageFrameList(const DICOMGDCMImageFrameList& input);
-
-    typedef std::list<DICOMGDCMImageFrameList> SortingBlockList;
+    typedef std::vector<DICOMDatasetAccessingImageFrameList> SortingBlockList;
     /**
       \brief "Hook" for sub-classes, see \ref DICOMITKSeriesGDCMReader_Condensing
       \return REMAINING blocks
@@ -298,7 +315,7 @@ class MITKDICOMREADER_EXPORT DICOMITKSeriesGDCMReader : public DICOMFileReader
     /// \brief Sorting step as described in \ref DICOMITKSeriesGDCMReader_LoadingStrategy
   static SortingBlockList InternalExecuteSortingStep(
         unsigned int sortingStepIndex,
-        DICOMDatasetSorter::Pointer sorter,
+        const DICOMDatasetSorter::Pointer& sorter,
         const SortingBlockList& input);
 
     /// \brief Loads the mitk::Image by means of an itk::ImageSeriesReader
@@ -311,12 +328,14 @@ class MITKDICOMREADER_EXPORT DICOMITKSeriesGDCMReader : public DICOMFileReader
   private:
 
     /// \brief Creates the required sorting steps described in \ref DICOMITKSeriesGDCMReader_ForcedConfiguration
-    void EnsureMandatorySortersArePresent(unsigned int decimalPlacesForOrientation);
+    void EnsureMandatorySortersArePresent(unsigned int decimalPlacesForOrientation, bool simpleVolumeImport = false);
 
   protected:
 
     // NOT nice, made available to ThreeDnTDICOMSeriesReader due to lack of time
     bool m_FixTiltByShearing; // could be removed by ITKDICOMSeriesReader NOT flagging tilt unless requested to fix it!
+
+    bool m_SimpleVolumeReading;
 
   private:
 
@@ -342,6 +361,7 @@ class MITKDICOMREADER_EXPORT DICOMITKSeriesGDCMReader : public DICOMFileReader
     double m_DecimalPlacesForOrientation;
 
     DICOMTagCache::Pointer m_TagCache;
+    bool m_ExternalCache;
 };
 
 }

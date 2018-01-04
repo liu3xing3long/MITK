@@ -25,6 +25,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <mitkRawShModel.h>
 #include <itkAnalyticalDiffusionQballReconstructionImageFilter.h>
 #include <mitkPointSet.h>
+#include <itkLinearInterpolateImageFunction.h>
 
 namespace itk
 {
@@ -93,7 +94,7 @@ protected:
     double RoundToNearest(double num);
     std::string GetTime();
     bool PrepareLogFile();  /** Prepares the log file and returns true if successful or false if failed. */
-    void PrintToLog(string m, bool addTime=true, bool linebreak=true, bool stdOut=true);
+    void PrintToLog(std::string m, bool addTime=true, bool linebreak=true, bool stdOut=true);
 
     /** Transform generated image compartment by compartment, channel by channel and slice by slice using DFT and add k-space artifacts/effects. */
     DoubleDwiType::Pointer SimulateKspaceAcquisition(std::vector< DoubleDwiType::Pointer >& images);
@@ -108,7 +109,6 @@ protected:
     ItkDoubleImgType::Pointer NormalizeInsideMask(ItkDoubleImgType::Pointer image);
     void InitializeData();
     void InitializeFiberData();
-    double InterpolateValue(itk::Point<float, 3> itkP, ItkDoubleImgType::Pointer img);
 
     // input
     mitk::FiberfoxParameters<double>            m_Parameters;
@@ -153,6 +153,7 @@ protected:
     int                                         m_NumMotionVolumes;
 
     itk::Statistics::MersenneTwisterRandomVariateGenerator::Pointer m_RandGen;
+    itk::LinearInterpolateImageFunction< ItkDoubleImgType, float >::Pointer   m_DoubleInterpolator;
 };
 }
 

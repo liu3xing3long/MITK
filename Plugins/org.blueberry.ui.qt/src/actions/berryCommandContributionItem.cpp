@@ -39,16 +39,14 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "../handlers/berryIHandlerService.h"
 #include "../services/berryIServiceLocator.h"
 
-#include "../internal/berryWorkbenchPlugin.h"
+#include "../berryWorkbenchPlugin.h"
 
 #include <QMenu>
 #include <QMenuBar>
 #include <QToolBar>
 #include <QApplication>
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5,0,0))
 #include <QMetaMethod>
-#endif
 
 namespace berry
 {

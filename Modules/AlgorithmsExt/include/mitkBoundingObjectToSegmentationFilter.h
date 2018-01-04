@@ -16,28 +16,29 @@ See LICENSE.txt or http://www.mitk.org for details.
 #ifndef MITKBOUNDINGOBJECTTOSEGMENTATIONFILTER_H
 #define MITKBOUNDINGOBJECTTOSEGMENTATIONFILTER_H
 
-#include <mitkImageToImageFilter.h>
 #include <mitkBoundingObjectGroup.h>
+#include <mitkImageToImageFilter.h>
 
 #include <MitkAlgorithmsExtExports.h>
 
-namespace mitk{
+namespace mitk
+{
   class MITKALGORITHMSEXT_EXPORT BoundingObjectToSegmentationFilter : public ImageToImageFilter
   {
   public:
     mitkClassMacro(BoundingObjectToSegmentationFilter, ImageToImageFilter);
-    itkFactorylessNewMacro(Self)
-    itkCloneMacro(Self)
+    itkFactorylessNewMacro(Self) itkCloneMacro(Self)
 
-    void SetBoundingObject(mitk::BoundingObject::Pointer boundingObject);
+      void SetBoundingObject(mitk::BoundingObject::Pointer boundingObject);
+
   protected:
     BoundingObjectToSegmentationFilter();
-    virtual ~BoundingObjectToSegmentationFilter();
+    ~BoundingObjectToSegmentationFilter() override;
 
-    virtual void GenerateData() override;
+    void GenerateData() override;
 
     mitk::BoundingObjectGroup::Pointer m_boundingObjectGroup;
 
-  };//class
-}//namespace
+  }; // class
+} // namespace
 #endif

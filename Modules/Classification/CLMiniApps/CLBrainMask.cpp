@@ -62,7 +62,7 @@ void
   }
 
   mitk::Image::Pointer img = mitk::ImportItkImage(itkMask1);
-  mitk::IOUtil::SaveImage(img, output);
+  mitk::IOUtil::Save(img, output);
 }
 
 int main(int argc, char* argv[])
@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
   parser.setDescription("Normalizes a MR image. Sets the Median of the tissue covered by mask 0 to 0 and the median of the area covered by mask 1 to 1.");
   parser.setContributor("MBI");
 
-  map<string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
+  std::map<std::string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
 
   if (parsedArgs.size()==0)
   {
@@ -92,9 +92,9 @@ int main(int argc, char* argv[])
     return EXIT_SUCCESS;
   }
 
-  mitk::Image::Pointer image = mitk::IOUtil::LoadImage(parsedArgs["image"].ToString());
-  mitk::Image::Pointer im2= mitk::IOUtil::LoadImage(parsedArgs["image2"].ToString());
-  mitk::Image::Pointer mask = mitk::IOUtil::LoadImage(parsedArgs["mask"].ToString());
+  mitk::Image::Pointer image = dynamic_cast<mitk::Image*>(mitk::IOUtil::Load(parsedArgs["image"].ToString())[0].GetPointer());
+  mitk::Image::Pointer im2= dynamic_cast<mitk::Image*>(mitk::IOUtil::Load(parsedArgs["image2"].ToString())[0].GetPointer());
+  mitk::Image::Pointer mask = dynamic_cast<mitk::Image*>(mitk::IOUtil::Load(parsedArgs["mask"].ToString())[0].GetPointer());
 
   AccessByItk_3(image, Normalize, im2, mask, parsedArgs["output"].ToString());
 

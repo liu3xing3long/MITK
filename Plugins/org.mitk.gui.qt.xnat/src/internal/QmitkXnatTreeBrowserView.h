@@ -20,6 +20,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <QmitkAbstractView.h>
 
 #include "ui_QmitkXnatTreeBrowserViewControls.h"
+#include "QmitkHttpStatusCodeHandler.h"
 
 // ctkXnatCore
 #include "ctkXnatSession.h"
@@ -43,7 +44,6 @@ class QMenu;
 
 \warning This class is not yet documented. Use "git blame" and ask the author to provide basic documentation.
 
-\sa QmitkFunctionality
 \ingroup ${plugin_target}_internal
 */
 class QmitkXnatTreeBrowserView : public QmitkAbstractView
@@ -61,6 +61,11 @@ public:
 
   virtual void CreateQtPartControl(QWidget *parent) override;
 
+  enum SearchMethod {
+    ProjectLevel = 0,
+    SubjectLevel = 1
+  };
+
 protected slots:
 
   /// \brief Opens or reuses the xnat editor with the activated node as root item.
@@ -71,6 +76,9 @@ protected slots:
 
   /// \brief Cleans the tree model
   void CleanTreeModel(ctkXnatSession* session);
+
+  /// \brief Searches the tree model
+  void Search(const QString &toSearch);
 
   void OnContextMenuRequested(const QPoint & pos);
   void OnContextMenuDownloadAndOpenFile();
@@ -86,12 +94,14 @@ protected slots:
 
   void OnProgress(QUuid, double);
 
-  void itemSelected(const QModelIndex& index);
+  void ItemSelected(const QModelIndex& index);
 
   void OnUploadFromDataStorage();
 
-  void sessionTimedOutMsg();
-  void sessionTimesOutSoonMsg();
+  void SessionTimedOutMsg();
+  void SessionTimesOutSoonMsg();
+
+  void ToggleConnection();
 
 protected:
 
@@ -116,6 +126,9 @@ private:
   void InternalOpenFiles(const QFileInfoList&, mitk::StringProperty::Pointer xnatURL);
 
   void SetStatusInformation(const QString&);
+  void FilePathNotAvailableWarning(QString file);
+
+  void CleanUp();
 
   ctkServiceTracker<mitk::IDataStorageService*> m_DataStorageServiceTracker;
   QmitkXnatTreeModel* m_TreeModel;
@@ -124,6 +137,13 @@ private:
   QString m_DownloadPath;
 
   QMenu* m_ContextMenu;
+
+  bool m_SilentMode;
+  QModelIndexList m_hiddenItems;
+
+  bool m_AlreadyInSearch = false;
+
+  std::string ReplaceSpecialChars(const std::string& input) const;
 };
 
 #endif // QMITKXNATTREEBROWSERVIEW_H

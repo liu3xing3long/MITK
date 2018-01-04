@@ -30,21 +30,22 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <berryIWorkbenchWindow.h>
 
 // MITK includes (GUI)
-#include "QmitkStdMultiWidget.h"
 #include "QmitkDataNodeSelectionProvider.h"
 #include "mitkDataNodeObject.h"
 
 // MITK includes (general)
-#include "mitkNodePredicateDataType.h"
-#include "mitkNodePredicateDimension.h"
-#include "mitkNodePredicateAnd.h"
-#include "mitkImageTimeSelector.h"
-#include "mitkVectorImageMapper2D.h"
-#include "mitkProperties.h"
+#include <mitkNodePredicateDataType.h>
+#include <mitkNodePredicateDimension.h>
+#include <mitkNodePredicateAnd.h>
+#include <mitkImageTimeSelector.h>
+#include <mitkVectorImageMapper2D.h>
+#include <mitkProperties.h>
+#include <mitkLevelWindowProperty.h>
+#include <mitkImageStatisticsHolder.h>
 
 // Includes for image casting between ITK and MITK
-#include "mitkImageCast.h"
-#include "mitkITKImageImport.h"
+#include <mitkImageCast.h>
+#include <mitkITKImageImport.h>
 
 // ITK includes (general)
 #include <itkVectorImage.h>
@@ -76,6 +77,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 // Resampling
 #include <itkResampleImageFilter.h>
 #include <itkNearestNeighborInterpolateImageFunction.h>
+#include <itkBSplineInterpolateImageFunction.h>
 #include <itkCastImageFilter.h>
 #include <itkLinearInterpolateImageFunction.h>
 
@@ -142,9 +144,9 @@ typedef itk::NearestNeighborInterpolateImageFunction< ImageType, double >       
 
 QmitkBasicImageProcessing::QmitkBasicImageProcessing()
 : QmitkAbstractView(),
-  m_Controls(NULL),
-  m_SelectedImageNode(NULL),
-  m_TimeStepperAdapter(NULL)
+  m_Controls(nullptr),
+  m_SelectedImageNode(nullptr),
+  m_TimeStepperAdapter(nullptr)
 {
 }
 
@@ -157,7 +159,7 @@ QmitkBasicImageProcessing::~QmitkBasicImageProcessing()
 
 void QmitkBasicImageProcessing::CreateQtPartControl(QWidget *parent)
 {
-  if (m_Controls == NULL)
+  if (m_Controls == nullptr)
   {
     m_Controls = new Ui::QmitkBasicImageProcessingViewControls;
     m_Controls->setupUi(parent);
@@ -238,9 +240,19 @@ void QmitkBasicImageProcessing::CreateConnections()
     connect( (QObject*)(m_Controls->rBTwoImOp), SIGNAL( clicked() ), this, SLOT( ChangeGUI() ) );
     connect( (QObject*)(m_Controls->cbParam4), SIGNAL( activated(int) ), this, SLOT( SelectInterpolator(int) ) );
   }
+}
 
-  m_TimeStepperAdapter = new QmitkStepperAdapter((QObject*) m_Controls->sliceNavigatorTime,
-    GetRenderWindowPart()->GetTimeNavigationController()->GetTime(), "sliceNavigatorTimeFromBIP");
+void QmitkBasicImageProcessing::InternalGetTimeNavigationController()
+{
+  auto renwin_part = GetRenderWindowPart();
+  if( renwin_part != nullptr )
+  {
+    auto tnc = renwin_part->GetTimeNavigationController();
+    if( tnc != nullptr )
+    {
+      m_TimeStepperAdapter = new QmitkStepperAdapter((QObject*) m_Controls->sliceNavigatorTime, tnc->GetTime(), "sliceNavigatorTimeFromBIP");
+    }
+  }
 }
 
 void QmitkBasicImageProcessing::SetFocus()
@@ -257,7 +269,7 @@ void QmitkBasicImageProcessing::OnSelectionChanged(berry::IWorkbenchPart::Pointe
   // reset GUI
 //  this->ResetOneImageOpPanel();
   m_Controls->sliceNavigatorTime->setEnabled(false);
-  m_Controls->leImage1->setText("Select an Image in Data Manager");
+  m_Controls->leImage1->setText(tr("Select an Image in Data Manager"));
   m_Controls->tlWhat1->setEnabled(false);
   m_Controls->cbWhat1->setEnabled(false);
   m_Controls->tlWhat2->setEnabled(false);
@@ -273,14 +285,14 @@ void QmitkBasicImageProcessing::OnSelectionChanged(berry::IWorkbenchPart::Pointe
     //no image
     if( tempImage.IsNull() || (tempImage->IsInitialized() == false) )
     {
-      m_Controls->leImage1->setText("Not an image.");
+      m_Controls->leImage1->setText(tr("Not an image."));
       return;
     }
 
     //2D image
     if( tempImage->GetDimension() < 3)
     {
-      m_Controls->leImage1->setText("2D images are not supported.");
+      m_Controls->leImage1->setText(tr("2D images are not supported."));
       return;
     }
 
@@ -290,6 +302,9 @@ void QmitkBasicImageProcessing::OnSelectionChanged(berry::IWorkbenchPart::Pointe
     // button coding
     if ( tempImage->GetDimension() > 3 )
     {
+      // try to retrieve the TNC (for 4-D Processing )
+      this->InternalGetTimeNavigationController();
+
       m_Controls->sliceNavigatorTime->setEnabled(true);
       m_Controls->tlTime->setEnabled(true);
     }
@@ -316,8 +331,8 @@ void QmitkBasicImageProcessing::ChangeGUI()
 
 void QmitkBasicImageProcessing::ResetOneImageOpPanel()
 {
-  m_Controls->tlParam1->setText("Param1");
-  m_Controls->tlParam2->setText("Param2");
+  m_Controls->tlParam1->setText(tr("Param1"));
+  m_Controls->tlParam2->setText(tr("Param2"));
 
   m_Controls->cbWhat1->setCurrentIndex(0);
 
@@ -378,10 +393,10 @@ void QmitkBasicImageProcessing::SelectAction(int action)
   m_Controls->btnDoIt->setEnabled(false);
   m_Controls->cbHideOrig->setEnabled(false);
 
-  QString text1 = "No Parameters";
-  QString text2 = "No Parameters";
-  QString text3 = "No Parameters";
-  QString text4 = "No Parameters";
+  QString text1 = tr("No Parameters");
+  QString text2 = text1;
+  QString text3 = text1;
+  QString text4 = text1;
 
   if (action != 19)
   {
@@ -406,7 +421,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_Controls->sbParam1->hide();
       m_Controls->dsbParam1->show();
       m_Controls->dsbParam1->setEnabled(true);
-      text1 = "&Variance:";
+      text1 = tr("&Variance:");
       m_Controls->tlParam2->hide();
       m_Controls->sbParam2->hide();
 
@@ -421,7 +436,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_SelectedAction = MEDIAN;
       m_Controls->tlParam1->setEnabled(true);
       m_Controls->sbParam1->setEnabled(true);
-      text1 = "&Radius:";
+      text1 = tr("&Radius:");
       m_Controls->sbParam1->setMinimum( 0 );
       m_Controls->sbParam1->setMaximum( 200 );
       m_Controls->sbParam1->setValue( 3 );
@@ -435,8 +450,8 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_Controls->sbParam1->setEnabled(true);
       m_Controls->tlParam2->setEnabled(true);
       m_Controls->sbParam2->setEnabled(true);
-      text1 = "Number Iterations:";
-      text2 = "Regularization\n(Lambda/1000):";
+      text1 = tr("Number Iterations:");
+      text2 = tr("Regularization\n(Lambda/1000):");
       m_Controls->sbParam1->setMinimum( 1 );
       m_Controls->sbParam1->setMaximum( 1000 );
       m_Controls->sbParam1->setValue( 40 );
@@ -451,7 +466,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_SelectedAction = DILATION;
       m_Controls->tlParam1->setEnabled(true);
       m_Controls->sbParam1->setEnabled(true);
-      text1 = "&Radius:";
+      text1 = tr("&Radius:");
       m_Controls->sbParam1->setMinimum( 0 );
       m_Controls->sbParam1->setMaximum( 200 );
       m_Controls->sbParam1->setValue( 3 );
@@ -463,7 +478,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_SelectedAction = EROSION;
       m_Controls->tlParam1->setEnabled(true);
       m_Controls->sbParam1->setEnabled(true);
-      text1 = "&Radius:";
+      text1 = tr("&Radius:");
       m_Controls->sbParam1->setMinimum( 0 );
       m_Controls->sbParam1->setMaximum( 200 );
       m_Controls->sbParam1->setValue( 3 );
@@ -475,7 +490,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_SelectedAction = OPENING;
       m_Controls->tlParam1->setEnabled(true);
       m_Controls->sbParam1->setEnabled(true);
-      text1 = "&Radius:";
+      text1 = tr("&Radius:");
       m_Controls->sbParam1->setMinimum( 0 );
       m_Controls->sbParam1->setMaximum( 200 );
       m_Controls->sbParam1->setValue( 3 );
@@ -487,7 +502,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_SelectedAction = CLOSING;
       m_Controls->tlParam1->setEnabled(true);
       m_Controls->sbParam1->setEnabled(true);
-      text1 = "&Radius:";
+      text1 = tr("&Radius:");
       m_Controls->sbParam1->setMinimum( 0 );
       m_Controls->sbParam1->setMaximum( 200 );
       m_Controls->sbParam1->setValue( 3 );
@@ -501,7 +516,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_Controls->sbParam1->hide();
       m_Controls->dsbParam1->show();
       m_Controls->dsbParam1->setEnabled(true);
-      text1 = "Sigma of Gaussian Kernel:\n(in Image Spacing Units)";
+      text1 = tr("Sigma of Gaussian Kernel:\n(in Image Spacing Units)");
       m_Controls->tlParam2->hide();
       m_Controls->sbParam2->hide();
 
@@ -530,8 +545,8 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_Controls->sbParam1->setEnabled(true);
       m_Controls->tlParam2->setEnabled(true);
       m_Controls->sbParam2->setEnabled(true);
-      text1 = "Lower threshold:";
-      text2 = "Upper threshold:";
+      text1 = tr("Lower threshold:");
+      text2 = tr("Upper threshold:");
       m_Controls->sbParam1->setMinimum( -100000 );
       m_Controls->sbParam1->setMaximum( 100000 );
       m_Controls->sbParam1->setValue( 0 );
@@ -552,7 +567,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_SelectedAction = DOWNSAMPLING;
       m_Controls->tlParam1->setEnabled(true);
       m_Controls->sbParam1->setEnabled(true);
-      text1 = "Downsampling by Factor:";
+      text1 = tr("Downsampling by Factor:");
       m_Controls->sbParam1->setMinimum( 1 );
       m_Controls->sbParam1->setMaximum( 100 );
       m_Controls->sbParam1->setValue( 2 );
@@ -564,7 +579,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_SelectedAction = FLIPPING;
       m_Controls->tlParam1->setEnabled(true);
       m_Controls->sbParam1->setEnabled(true);
-      text1 = "Flip across axis:";
+      text1 = tr("Flip across axis:");
       m_Controls->sbParam1->setMinimum( 0 );
       m_Controls->sbParam1->setMaximum( 2 );
       m_Controls->sbParam1->setValue( 1 );
@@ -606,10 +621,10 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_Controls->dsbParam3->setSingleStep(0.1);
       m_Controls->dsbParam3->setValue(1.5);
 
-      text1 = "x-spacing:";
-      text2 = "y-spacing:";
-      text3 = "z-spacing:";
-      text4 = "Interplation:";
+      text1 = tr("x-spacing:");
+      text2 = tr("y-spacing:");
+      text3 = tr("z-spacing:");
+      text4 = tr("Interplation:");
       break;
     }
 
@@ -624,8 +639,8 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_Controls->tlParam2->show();
       m_Controls->dsbParam2->setEnabled(true);
       m_Controls->tlParam2->setEnabled(true);
-      text1 = "Output minimum:";
-      text2 = "Output maximum:";
+      text1 = tr("Output minimum:");
+      text2 = tr("Output maximum:");
       break;
     }
   case 21:
@@ -635,7 +650,7 @@ void QmitkBasicImageProcessing::SelectAction(int action)
       m_Controls->tlParam1->show();
       m_Controls->dsbParam1->setEnabled(true);
       m_Controls->tlParam1->setEnabled(true);
-      text1 = "Scaling value:";
+      text1 = tr("Scaling value:");
       break;
   }
 
@@ -666,19 +681,19 @@ void QmitkBasicImageProcessing::StartButtonClicked()
   }
   catch ( std::exception &e )
   {
-  QString exceptionString = "An error occured during image loading:\n";
+  QString exceptionString = tr("An error occured during image loading:\n");
   exceptionString.append( e.what() );
-    QMessageBox::warning( NULL, "Basic Image Processing", exceptionString , QMessageBox::Ok, QMessageBox::NoButton );
+    QMessageBox::warning( nullptr, "Basic Image Processing", exceptionString , QMessageBox::Ok, QMessageBox::NoButton );
     this->BusyCursorOff();
     return;
   }
 
-  // check if input image is valid, casting does not throw exception when casting from 'NULL-Object'
+  // check if input image is valid, casting does not throw exception when casting from 'nullptr-Object'
   if ( (! newImage) || (newImage->IsInitialized() == false) )
   {
     this->BusyCursorOff();
 
-    QMessageBox::warning( NULL, "Basic Image Processing", "Input image is broken or not initialized. Returning.", QMessageBox::Ok, QMessageBox::NoButton );
+    QMessageBox::warning( nullptr, "Basic Image Processing", tr("Input image is broken or not initialized. Returning."), QMessageBox::Ok, QMessageBox::NoButton );
     return;
   }
 
@@ -913,8 +928,8 @@ void QmitkBasicImageProcessing::StartButtonClicked()
   case INVERSION:
     {
       InversionFilterType::Pointer invFilter = InversionFilterType::New();
-      mitk::ScalarType min = newImage->GetScalarValueMin();
-      mitk::ScalarType max = newImage->GetScalarValueMax();
+      mitk::ScalarType min = newImage->GetStatistics()->GetScalarValueMin();
+      mitk::ScalarType max = newImage->GetStatistics()->GetScalarValueMax();
       invFilter->SetMaximum( max + min );
       invFilter->SetInput(itkImage);
       invFilter->UpdateLargestPossibleRegion();
@@ -1083,7 +1098,7 @@ void QmitkBasicImageProcessing::StartButtonClicked()
   catch (...)
   {
     this->BusyCursorOff();
-    QMessageBox::warning(NULL, "Warning", "Problem when applying filter operation. Check your input...");
+    QMessageBox::warning(nullptr, "Warning", "Problem when applying filter operation. Check your input...");
     return;
   }
 
@@ -1187,10 +1202,15 @@ void QmitkBasicImageProcessing::StartButton2Clicked()
 //  this->ResetTwoImageOpPanel();
 
   // check if 4D image and use filter on correct time step
-  int time = ((QmitkSliderNavigatorWidget*)m_Controls->sliceNavigatorTime)->GetPos();
   if(newImage1->GetDimension() > 3)
   {
     mitk::ImageTimeSelector::Pointer timeSelector = mitk::ImageTimeSelector::New();
+
+    auto sn_widget = static_cast<QmitkSliderNavigatorWidget*>( m_Controls->sliceNavigatorTime );
+    int time = 0;
+
+    if( sn_widget != nullptr )
+        time = sn_widget->GetPos();
 
     timeSelector->SetInput(newImage1);
     timeSelector->SetTimeNr( time );
@@ -1215,7 +1235,7 @@ void QmitkBasicImageProcessing::StartButton2Clicked()
   CastToItkImage( newImage2, itkImage2 );
 
   // Remove temp image
-//  newImage2 = NULL;
+//  newImage2 = nullptr;
 
   std::string nameAddition = "";
 
@@ -1303,8 +1323,13 @@ void QmitkBasicImageProcessing::StartButton2Clicked()
   case RESAMPLE_TO:
     {
 
-      itk::LinearInterpolateImageFunction<DoubleImageType>::Pointer nn_interpolator
-        = itk::LinearInterpolateImageFunction<DoubleImageType>::New();
+
+      itk::BSplineInterpolateImageFunction<DoubleImageType, double>::Pointer bspl_interpolator
+        = itk::BSplineInterpolateImageFunction<DoubleImageType, double>::New();
+      bspl_interpolator->SetSplineOrder( 3 );
+
+      itk::NearestNeighborInterpolateImageFunction< DoubleImageType >::Pointer nn_interpolator
+          = itk::NearestNeighborInterpolateImageFunction< DoubleImageType>::New();
 
       DoubleImageType::Pointer itkImage1 = DoubleImageType::New();
       DoubleImageType::Pointer itkImage2 = DoubleImageType::New();
@@ -1316,7 +1341,13 @@ void QmitkBasicImageProcessing::StartButton2Clicked()
       resampleFilter->SetInput( itkImage1 );
       resampleFilter->SetReferenceImage( itkImage2 );
       resampleFilter->SetUseReferenceImage( true );
-      resampleFilter->SetInterpolator( nn_interpolator );
+
+      // use NN interp with binary images
+      if( m_SelectedImageNode->GetNode()->GetProperty("binary") )
+        resampleFilter->SetInterpolator( nn_interpolator );
+      else
+        resampleFilter->SetInterpolator( bspl_interpolator );
+
       resampleFilter->SetDefaultPixelValue( 0 );
 
       try
@@ -1345,15 +1376,15 @@ void QmitkBasicImageProcessing::StartButton2Clicked()
   catch (const itk::ExceptionObject& e )
   {
     this->BusyCursorOff();
-    QMessageBox::warning(NULL, "ITK Exception", e.what() );
-    QMessageBox::warning(NULL, "Warning", "Problem when applying arithmetic operation to two images. Check dimensions of input images.");
+    QMessageBox::warning(nullptr, "ITK Exception", e.what() );
+    QMessageBox::warning(nullptr, "Warning", tr("Problem when applying arithmetic operation to two images. Check dimensions of input images."));
     return;
   }
 
   // disconnect pipeline; images will not be reused
   newImage1->DisconnectPipeline();
-  itkImage1 = NULL;
-  itkImage2 = NULL;
+  itkImage1 = nullptr;
+  itkImage2 = nullptr;
 
   // adjust level/window to new image and compose new image name
   mitk::LevelWindow levelwindow;

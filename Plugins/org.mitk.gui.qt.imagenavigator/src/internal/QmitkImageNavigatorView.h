@@ -54,17 +54,18 @@ public:
 
   QmitkImageNavigatorView();
 
-  virtual ~QmitkImageNavigatorView();
+  ~QmitkImageNavigatorView() override;
 
-  virtual void CreateQtPartControl(QWidget *parent) override;
+  void CreateQtPartControl(QWidget *parent) override;
 
-  virtual int GetSizeFlags(bool width) override;
-  virtual int ComputePreferredSize(bool width, int /*availableParallel*/, int /*availablePerpendicular*/, int preferredResult) override;
+  int GetSizeFlags(bool width) override;
+  int ComputePreferredSize(bool width, int /*availableParallel*/, int /*availablePerpendicular*/, int preferredResult) override;
 
 protected slots:
 
   void OnMillimetreCoordinateValueChanged();
   void OnRefetch();
+  void UpdateStatusBar();
 
 protected:
 

@@ -20,10 +20,9 @@ if(NOT MITK_DIR)
   option(MITK_USE_ACVD "Use Approximated Centroidal Voronoi Diagrams" OFF)
   option(MITK_USE_CTK "Use CTK in MITK" ${MITK_USE_BLUEBERRY})
   option(MITK_USE_DCMTK "Use DCMTK in MITK" ON)
-  option(MITK_USE_QT "Use Nokia's Qt library in MITK" ON)
+  option(MITK_USE_Qt5 "Use Qt 5 library in MITK" ON)
+  option(MITK_USE_DCMQI "Use dcmqi in MITK" OFF)
   option(MITK_USE_OpenCV "Use Intel's OpenCV library" OFF)
-  option(MITK_USE_SOFA "Use Simulation Open Framework Architecture" OFF)
-  option(MITK_USE_VMTK "Use the Vascular Modeling Toolkit in MITK" OFF)
   option(MITK_USE_Python "Enable Python wrapping in MITK" OFF)
 
   if(MITK_USE_BLUEBERRY AND NOT MITK_USE_CTK)
@@ -31,9 +30,9 @@ if(NOT MITK_DIR)
     set(MITK_USE_CTK ON CACHE BOOL "Use CTK in MITK" FORCE)
   endif()
 
-  if(MITK_USE_CTK AND NOT MITK_USE_QT)
-    message("Forcing MITK_USE_QT to ON because of MITK_USE_CTK")
-    set(MITK_USE_QT ON CACHE BOOL "Use Nokia's Qt library in MITK" FORCE)
+  if(MITK_USE_CTK AND NOT MITK_USE_Qt5)
+    message("Forcing MITK_USE_Qt5 to ON because of MITK_USE_CTK")
+    set(MITK_USE_Qt5 ON CACHE BOOL "Use Qt 5 library in MITK" FORCE)
   endif()
 
   set(MITK_USE_CableSwig ${MITK_USE_Python})
@@ -54,17 +53,14 @@ if(NOT MITK_DIR)
     MITK_USE_ACVD
     MITK_USE_CTK
     MITK_USE_DCMTK
-    MITK_USE_QT
+    MITK_USE_Qt5
+    MITK_USE_DCMQI
     MITK_USE_OpenCV
-    MITK_USE_SOFA
-    MITK_USE_VMTK
     MITK_USE_Python
    )
 
-  if(MITK_USE_Qt4)
+  if(MITK_USE_Qt5)
     # Look for Qt at the superbuild level, to catch missing Qt libs early
-    find_package(Qt4 4.7 REQUIRED)
-  elseif(MITK_USE_Qt5)
     find_package(Qt5Widgets REQUIRED)
   endif()
 
@@ -97,7 +93,7 @@ if(NOT MITK_DIR)
   # Create options to inject pre-build dependencies
   #-----------------------------------------------------------------------------
 
-  foreach(proj CTK DCMTK GDCM VTK ACVD ITK OpenCV SOFA VMTK CableSwig)
+  foreach(proj CTK DCMTK DCMQI GDCM VTK ACVD ITK OpenCV CableSwig)
     if(MITK_USE_${proj})
       set(MITK_${proj}_DIR "${${proj}_DIR}" CACHE PATH "Path to ${proj} build directory")
       mark_as_advanced(MITK_${proj}_DIR)
@@ -114,8 +110,8 @@ if(NOT MITK_DIR)
   endif()
 
   set(MITK_SOURCE_DIR "" CACHE PATH "MITK source code location. If empty, MITK will be cloned from MITK_GIT_REPOSITORY")
-  set(MITK_GIT_REPOSITORY "http://git.mitk.org/MITK.git" CACHE STRING "The git repository for cloning MITK")
-  set(MITK_GIT_TAG "releases/master" CACHE STRING "The git tag/hash to be used when cloning from MITK_GIT_REPOSITORY")
+  set(MITK_GIT_REPOSITORY "https://phabricator.mitk.org/diffusion/MITK/mitk.git" CACHE STRING "The git repository for cloning MITK")
+  set(MITK_GIT_TAG "origin/release/2016-11" CACHE STRING "The git tag/hash to be used when cloning from MITK_GIT_REPOSITORY")
   mark_as_advanced(MITK_SOURCE_DIR MITK_GIT_REPOSITORY MITK_GIT_TAG)
 
   #-----------------------------------------------------------------------------
@@ -131,10 +127,8 @@ if(NOT MITK_DIR)
   # Additional MITK CMake variables
   #-----------------------------------------------------------------------------
 
-  if(MITK_USE_Qt4 AND QT_QMAKE_EXECUTABLE)
-    list(APPEND additional_mitk_cmakevars "-DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE}")
-  elseif(MITK_USE_Qt5)
-    list(APPEND additional_mitk_cmakevars "-DDESIRED_QT_VERSION:STRING=5")
+  if(MITK_USE_Qt5)
+    list(APPEND additional_mitk_cmakevars "-DCMAKE_PREFIX_PATH:PATH=${CMAKE_PREFIX_PATH}")
   endif()
 
   if(MITK_USE_CTK)
@@ -214,15 +208,4 @@ else()
     message(FATAL_ERROR "VTK packages do not match:\n   ${MY_PROJECT_NAME}: ${my_vtk_dir}\n  MITK: ${VTK_DIR}")
   endif()
 
-  if(MITK_USE_Qt4)
-    set(my_qmake_executable ${QT_QMAKE_EXECUTABLE})
-
-    if(my_qmake_executable AND MITK_QMAKE_EXECUTABLE)
-      if(NOT my_qmake_executable STREQUAL ${MITK_QMAKE_EXECUTABLE})
-        message(FATAL_ERROR "Qt qmake does not match:\n   ${MY_PROJECT_NAME}: ${my_qmake_executable}\n  MITK: ${MITK_QMAKE_EXECUTABLE}")
-      endif()
-    endif()
-  endif()
-
 endif()
-

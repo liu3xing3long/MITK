@@ -1,5 +1,9 @@
 set(MODULE_TESTS
   mitkDICOMReaderConfiguratorTest.cpp
+  mitkDICOMDCMTKTagScannerTest.cpp
+  mitkDICOMSimpleVolumeImportTest.cpp
+  mitkDICOMTagPathTest.cpp
+  mitkDICOMPropertyTest.cpp
 )
 
 set(MODULE_CUSTOM_TESTS

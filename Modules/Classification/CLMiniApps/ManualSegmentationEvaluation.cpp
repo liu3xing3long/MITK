@@ -59,7 +59,6 @@ void ProcessFeatureImages(const mitk::Image::Pointer & raw_image, const mitk::Im
   typedef itk::ConstNeighborhoodIterator<DoubleImageType> NeighborhoodType; // Neighborhood iterator to access image
   typedef itk::Functor::NeighborhoodFirstOrderStatistics<NeighborhoodType, double> FunctorType;
   typedef itk::NeighborhoodFunctorImageFilter<DoubleImageType, DoubleImageType, FunctorType> FOSFilerType;
-  typedef FOSFilerType::MaskImageType MaskImageType;
 
   m_FeatureImageVector.clear();
 
@@ -193,16 +192,16 @@ int main(int argc, char* argv[])
   parser.setContributor("MBI");
 
   // Params parsing
-  map<string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
+  std::map<std::string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
   if (parsedArgs.size()==0)
     return EXIT_FAILURE;
 
-  std::string inputdir = us::any_cast<string>(parsedArgs["inputdir"]);
-  std::string outputdir = us::any_cast<string>(parsedArgs["outputdir"]);
-  std::string mitkprojectdata = us::any_cast<string>(parsedArgs["mitkprojectdata"]);
-  std::string csf_mps_name = us::any_cast<string>(parsedArgs["csfmps"]);
-  std::string les_mps_name = us::any_cast<string>(parsedArgs["lesmps"]);
-  std::string bra_mps_name = us::any_cast<string>(parsedArgs["bramps"]);
+  std::string inputdir = us::any_cast<std::string>(parsedArgs["inputdir"]);
+  std::string outputdir = us::any_cast<std::string>(parsedArgs["outputdir"]);
+  std::string mitkprojectdata = us::any_cast<std::string>(parsedArgs["mitkprojectdata"]);
+  std::string csf_mps_name = us::any_cast<std::string>(parsedArgs["csfmps"]);
+  std::string les_mps_name = us::any_cast<std::string>(parsedArgs["lesmps"]);
+  std::string bra_mps_name = us::any_cast<std::string>(parsedArgs["bramps"]);
 
   mitk::Image::Pointer class_mask_sampled, raw_image, class_mask;
   mitk::PointSet::Pointer CSF_mps, LES_mps, BRA_mps;
@@ -214,9 +213,9 @@ int main(int argc, char* argv[])
   raw_image = map.size() <= 7 ? dynamic_cast<mitk::Image *>(so[0].GetPointer()) : dynamic_cast<mitk::Image *>(so[1].GetPointer());
   class_mask = map.size() <= 7 ? dynamic_cast<mitk::Image *>(so[1].GetPointer()) : dynamic_cast<mitk::Image *>(so[0].GetPointer());
 
-  CSF_mps = mitk::IOUtil::LoadPointSet(inputdir + "/" + csf_mps_name);
-  LES_mps = mitk::IOUtil::LoadPointSet(inputdir + "/" + les_mps_name);
-  BRA_mps = mitk::IOUtil::LoadPointSet(inputdir + "/" + bra_mps_name);
+  CSF_mps = dynamic_cast<mitk::PointSet*>(mitk::IOUtil::Load(inputdir + "/" + csf_mps_name)[0].GetPointer());
+  LES_mps = dynamic_cast<mitk::PointSet*>(mitk::IOUtil::Load(inputdir + "/" + les_mps_name)[0].GetPointer());
+  BRA_mps = dynamic_cast<mitk::PointSet*>(mitk::IOUtil::Load(inputdir + "/" + bra_mps_name)[0].GetPointer());
 
   unsigned int num_points = CSF_mps->GetSize() + LES_mps->GetSize() + BRA_mps->GetSize();
   MITK_INFO << "Found #" << num_points << " points over all classes.";

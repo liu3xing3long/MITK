@@ -23,8 +23,9 @@ See LICENSE.txt or http://www.mitk.org for details.
 // MITK includes
 #include "MitkXNATExports.h"
 
-namespace mitk {
-class DataNode;
+namespace mitk
+{
+  class DataNode;
 }
 
 class MITKXNAT_EXPORT QmitkXnatTreeModel : public ctkXnatTreeModel
@@ -34,23 +35,29 @@ class MITKXNAT_EXPORT QmitkXnatTreeModel : public ctkXnatTreeModel
 public:
   QmitkXnatTreeModel();
 
-  virtual QVariant data(const QModelIndex& index, int role) const;
+  QVariant data(const QModelIndex &index, int role) const override;
 
-  virtual bool dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent);
+  bool dropMimeData(
+    const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent) override;
 
   using QAbstractItemModel::supportedDropActions;
   virtual Qt::DropActions supportedDropActions();
 
-  virtual Qt::ItemFlags flags(const QModelIndex &index) const;
+  Qt::ItemFlags flags(const QModelIndex &index) const override;
 
-  ctkXnatObject* GetXnatObjectFromUrl(const QString&);
+  ctkXnatObject *GetXnatObjectFromUrl(const QString &);
 
-  signals:
-  void ResourceDropped(const QList<mitk::DataNode*>&, ctkXnatObject*, const QModelIndex&);
+  void fetchMore(const QModelIndex &index) override;
+
+  QModelIndexList match(
+    const QModelIndex &start, int role, const QVariant &value, int hits, Qt::MatchFlags flags) const override;
+
+signals:
+  void Error(const QModelIndex &idx);
+  void ResourceDropped(const QList<mitk::DataNode *> &, ctkXnatObject *, const QModelIndex &);
 
 private:
-    ctkXnatObject *InternalGetXnatObjectFromUrl(const QString &xnatObjectType, const QString &url, ctkXnatObject *parent);
-
+  ctkXnatObject *InternalGetXnatObjectFromUrl(const QString &xnatObjectType, const QString &url, ctkXnatObject *parent);
 };
 
 #endif // QMITKXNATTREEMODEL_H

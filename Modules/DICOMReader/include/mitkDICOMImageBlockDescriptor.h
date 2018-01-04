@@ -33,30 +33,52 @@ See LICENSE.txt or http://www.mitk.org for details.
 namespace mitk
 {
 
-/**
-   \ingroup DICOMReaderModule
-   \brief Output descriptor for DICOMFileReader.
+  struct DICOMCachedValueInfo
+  {
+    unsigned int TimePoint;
+    unsigned int SliceInTimePoint;
+    std::string Value;
+  };
 
-   As a result of analysis by a mitk::DICOMFileReader, this class
-   describes the properties of a single mitk::Images that could
-   be loaded by the file reader.
+  class DICOMCachedValueLookupTable : public GenericLookupTable< DICOMCachedValueInfo >
+  {
+  public:
+    typedef DICOMCachedValueLookupTable Self;
+    typedef GenericLookupTable< DICOMCachedValueInfo >   Superclass;
+    const char *GetNameOfClass() const override
+    {
+      return "DICOMCachedValueLookupTable";
+    }
 
-   The descriptor contains the following information:
-    - the mitk::Image itself. This will be NULL after analysis and only be present after actual loading.
-    - a list of frames (mostly: filenames) that went into composition of the mitk::Image.
-    - an assessment of the reader's ability to load this set of files (ReaderImplementationLevel)
-      - this can be used for reader selection when one reader is able to load an image with correct colors and the other is able to produce only gray values, for example
-    - description of aspects of the image. Mostly a key-value list implemented by means of mitk::PropertyList.
-      - for specific keys and possible values, see documentation of specific readers.
+    DICOMCachedValueLookupTable() {}
+    Superclass& operator=(const Superclass& other) override { return Superclass::operator=(other); }
+    ~DICOMCachedValueLookupTable() override {}
+  };
 
-   \note an mitk::Image may both consist of multiple files (the "old" DICOM way) or a mitk::Image may be described by a single DICOM file or even only parts of a DICOM file (the newer multi-frame DICOM classes). To reflect this DICOMImageFrameList describes a list of frames from different or a single file.
+  /**
+     \ingroup DICOMReaderModule
+     \brief Output descriptor for DICOMFileReader.
 
-   Described aspects of an image are:
-    - whether pixel spacing is meant to be in-patient or on-detector (mitk::PixelSpacingInterpretation)
-    - details about a possible gantry tilt (intended for use by file readers, may be hidden later)
-*/
-class MITKDICOMREADER_EXPORT DICOMImageBlockDescriptor
-{
+     As a result of analysis by a mitk::DICOMFileReader, this class
+     describes the properties of a single mitk::Images that could
+     be loaded by the file reader.
+
+     The descriptor contains the following information:
+     - the mitk::Image itself. This will be nullptr after analysis and only be present after actual loading.
+     - a list of frames (mostly: filenames) that went into composition of the mitk::Image.
+     - an assessment of the reader's ability to load this set of files (ReaderImplementationLevel)
+     - this can be used for reader selection when one reader is able to load an image with correct colors and the other is able to produce only gray values, for example
+     - description of aspects of the image. Mostly a key-value list implemented by means of mitk::PropertyList.
+     - for specific keys and possible values, see documentation of specific readers.
+
+     \note an mitk::Image may both consist of multiple files (the "old" DICOM way) or a mitk::Image may be described by a single DICOM file or even only parts of a DICOM file (the newer multi-frame DICOM classes). To reflect this DICOMImageFrameList describes a list of frames from different or a single file.
+
+     Described aspects of an image are:
+     - whether pixel spacing is meant to be in-patient or on-detector (mitk::PixelSpacingInterpretation)
+     - details about a possible gantry tilt (intended for use by file readers, may be hidden later)
+     */
+  class MITKDICOMREADER_EXPORT DICOMImageBlockDescriptor
+  {
   public:
 
     DICOMImageBlockDescriptor();
@@ -115,7 +137,7 @@ class MITKDICOMREADER_EXPORT DICOMImageBlockDescriptor
     PixelSpacingInterpretation GetPixelSpacingInterpretation() const;
 
     /// Describe the correct x/y pixel spacing of the mitk::Image (which some readers might need to adjust after loading)
-    void GetDesiredMITKImagePixelSpacing( ScalarType& spacingXinMM, ScalarType& spacingYinMM) const;
+    void GetDesiredMITKImagePixelSpacing(ScalarType& spacingXinMM, ScalarType& spacingYinMM) const;
 
     /// Describe the gantry tilt of the acquisition
     void SetTiltInformation(const GantryTiltInformation& info);
@@ -129,18 +151,31 @@ class MITKDICOMREADER_EXPORT DICOMImageBlockDescriptor
     /// SOP Class as human readable name (e.g. "CT Image Storage")
     std::string GetSOPClassUIDAsName() const;
 
+    /**Convinience method that returns the property timesteps*/
+    int GetNumberOfTimeSteps() const;
+    /**return the number of frames that constitute one timestep.*/
+    int GetNumberOfFramesPerTimeStep() const;
+
     void SetTagCache(DICOMTagCache* privateCache);
 
+    /** Type specifies additional tags of interest. Key is the tag path of interest.
+    * The value is an optional user defined name for the property that should be used to store the tag value(s).
+    * Empty value is default and will imply to use the found DICOMTagPath as property name.*/
+    typedef std::map<DICOMTagPath, std::string> AdditionalTagsMapType;
     /**
-    * \brief Set a list of DICOM-Tags that will be copied into the property of the mitk::Image.
+    * \brief Set a list of DICOMTagPaths that specifiy all DICOM-Tags that will be copied into the property of the mitk::Image.
     *
     * This method can be used to specify a list of DICOM-tags that shall be available after the loading.
-    * The content of the DICOM tags will be stored in a StringLookupTable on the mitk::Image,
-    * where the property-key equals the key in the unordered_map.
+    * The value in the tagMap is an optional user defined name for the property key that should be used
+    * when storing the property). Empty value is default and will imply to use the found DICOMTagPath
+    * as property key.
+    * By default the content of the DICOM tags will be stored in a StringLookupTable on the mitk::Image.
+    * This behaviour can be changed by setting a different TagLookupTableToPropertyFunctor via
+    * SetTagLookupTableToPropertyFunctor().
     */
-    void SetAdditionalTagsOfInterest( const std::unordered_map<const char*, DICOMTag>& tagList );
+    void SetAdditionalTagsOfInterest(const AdditionalTagsMapType& tagMap);
 
-    typedef std::function<mitk::BaseProperty::Pointer(const StringLookupTable&) > TagLookupTableToPropertyFunctor;
+    typedef std::function<mitk::BaseProperty::Pointer(const DICOMCachedValueLookupTable&) > TagLookupTableToPropertyFunctor;
 
     /**
     * \brief Set a functor that defines how the slice-specific tag-values are stored in a Property.
@@ -152,7 +187,7 @@ class MITKDICOMREADER_EXPORT DICOMImageBlockDescriptor
     * By default, the StringLookupTable is stored in a StringLookupTableProperty except if all values are
     * identical. In this case, the unique value is stored only once in a StringProperty.
     */
-    void SetTagLookupTableToPropertyFunctor( TagLookupTableToPropertyFunctor );
+    void SetTagLookupTableToPropertyFunctor(TagLookupTableToPropertyFunctor);
 
 
     /// Print information about this image block to given stream
@@ -168,7 +203,7 @@ class MITKDICOMREADER_EXPORT DICOMImageBlockDescriptor
     Image::Pointer DescribeImageWithProperties(Image* mitkImage);
     void UpdateImageDescribingProperties() const;
 
-    static mitk::BaseProperty::Pointer GetPropertyForDICOMValues(const StringLookupTable& stringLookupTable);
+    static mitk::BaseProperty::Pointer GetPropertyForDICOMValues(const DICOMCachedValueLookupTable& cacheLookupTable);
 
     double stringtodouble(const std::string& str) const;
     DICOMImageFrameList m_ImageFrameList;
@@ -185,10 +220,11 @@ class MITKDICOMREADER_EXPORT DICOMImageBlockDescriptor
 
     mutable bool m_PropertiesOutOfDate;
 
-    std::unordered_map<const char*, DICOMTag> m_AdditionalTagList;
+    AdditionalTagsMapType m_AdditionalTagMap;
+    std::set<std::string> m_FoundAdditionalTags;
 
     TagLookupTableToPropertyFunctor m_PropertyFunctor;
-};
+  };
 
 }
 

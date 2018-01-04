@@ -17,6 +17,9 @@ See LICENSE.txt or http://www.mitk.org for details.
 #ifndef UltrasoundSupport_h
 #define UltrasoundSupport_h
 
+#include <mitkLookupTable.h>
+#include <mitkLookupTableProperty.h>
+
 #include <berryISelectionListener.h>
 
 #include <QmitkAbstractView.h>
@@ -26,6 +29,12 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "QmitkUSControlsBModeWidget.h"
 #include "QmitkUSControlsDopplerWidget.h"
 #include "QmitkUSControlsProbesWidget.h"
+#include <mitkBaseRenderer.h>
+#include "QmitkRenderWindow.h"
+#include <mitkStandaloneDataStorage.h>
+#include <QmitkLevelWindowWidget.h>
+#include <QmitkSliceWidget.h>
+#include <QmitkPAUSViewerView.h>
 
 #include <QTime>
 
@@ -35,7 +44,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 \brief UltrasoundSupport
 This plugin provides functionality to manage Ultrasound devices, create video devices and to view device images.
 
-\sa QmitkFunctionality
 \ingroup ${plugin_target}_internal
 */
 class UltrasoundSupport : public QmitkAbstractView
@@ -44,106 +52,135 @@ class UltrasoundSupport : public QmitkAbstractView
   // (everything that derives from QObject and wants to have signal/slots)
   Q_OBJECT
 
-  public:
+public:
 
-    virtual void SetFocus() override;
+  virtual void SetFocus() override;
 
-    static const std::string VIEW_ID;
+  static const std::string VIEW_ID;
 
-    virtual void CreateQtPartControl(QWidget *parent) override;
+  virtual void CreateQtPartControl(QWidget *parent) override;
 
-    UltrasoundSupport();
-    virtual ~UltrasoundSupport();
+  UltrasoundSupport();
+  virtual ~UltrasoundSupport();
 
   public slots:
-    /*
-    * \brief This is called when the newDeviceWidget is closed
-    */
-    void OnNewDeviceWidgetDone();
+  /*
+  * \brief This is called when the newDeviceWidget is closed
+  */
+  void OnNewDeviceWidgetDone();
 
   protected slots:
 
-    void OnClickedAddNewDevice();
+  void OnClickedAddNewDevice();
 
-    void OnChangedFramerateLimit();
+  void OnChangedFramerateLimit();
 
-    /*
-     *\brief Called, when the selection in the list of the active devices changes.
-     */
-    void OnChangedActiveDevice();
+  void OnClickedEditDevice();
 
-    void OnClickedFreezeButton();
+  /*
+   *\brief Called, when the selection in the list of the active devices changes.
+   */
+  void OnChangedActiveDevice();
 
-    void OnDeciveServiceEvent(const ctkServiceEvent event);
+  void OnClickedFreezeButton();
 
-    /*
-    * \brief This is the main imaging loop that updates the image and is called regularily during the imaging process
-    */
-    void UpdateImage();
+  void OnDeciveServiceEvent(const ctkServiceEvent event);
 
-    void RenderImage2d();
+  /*
+  * \brief This is the main imaging loop that updates the image and is called regularily during the imaging process
+  */
+  void UpdateImage();
 
-    void RenderImage3d();
+  void RenderImage2d();
 
-    void StartTimers();
+  void RenderImage3d();
 
-    void StopTimers();
+  void StartTimers();
 
-  protected:
+  void StopTimers();
 
-    void CreateControlWidgets();
-    void RemoveControlWidgets();
+protected:
 
-    /** The device that is currently used to aquire images */
-    mitk::USDevice::Pointer m_Device;
+  void CreateControlWidgets();
+  void RemoveControlWidgets();
+
+  void CreateWindows();
+
+  QmitkPAUSViewerView* m_PausViewerView;
+
+  Ui::UltrasoundSupportControls m_Controls;
+
+  QmitkUSAbstractCustomWidget*  m_ControlCustomWidget;
+  QmitkUSControlsBModeWidget*   m_ControlBModeWidget;
+  QmitkUSControlsDopplerWidget* m_ControlDopplerWidget;
+  QmitkUSControlsProbesWidget*  m_ControlProbesWidget;
+
+  bool m_ImageAlreadySetToNode;
+
+  unsigned int m_CurrentImageWidth;
+  unsigned int m_CurrentImageHeight;
+
+  /** Keeps track of the amount of output Nodes*/
+  unsigned int m_AmountOfOutputs;
+
+  mitk::StandaloneDataStorage::Pointer m_PADataStorage;
+  mitk::StandaloneDataStorage::Pointer m_USDataStorage;
+
+  /** The device that is currently used to aquire images */
+  mitk::USDevice::Pointer m_Device;
+
+  void SetTimerIntervals(int intervalPipeline, int interval2D, int interval3D);
+  /** This timer triggers periodic updates to the pipeline */
+  QTimer* m_UpdateTimer;
+  QTimer* m_RenderingTimer2d;
+  QTimer* m_RenderingTimer3d;
+
+  /** These clocks are used to compute the framerate in the methods DisplayImage(),RenderImage2d() and RenderImage3d(). */
+  QTime  m_Clock;
+  QTime  m_Clock2d;
+  QTime  m_Clock3d;
+
+  /** A counter to comute the framerate. */
+  int m_FrameCounterPipeline;
+  int m_FrameCounter2d;
+  int m_FrameCounter3d;
+  int m_FPSPipeline, m_FPS2d, m_FPS3d;
+
+  /** Stores the properties of some QWidgets (and the tool storage file name) to QSettings.*/
+  void StoreUISettings();
+
+  /** Loads the properties of some QWidgets (and the tool storage file name) from QSettings.*/
+  void LoadUISettings();
+
+  /** The nodes that we feed images into.*/
+  std::vector<mitk::DataNode::Pointer> m_Node;
+  /** Adds a new node to the m_Nodes vector*/
+  void InitNewNode();
+  /** Destroys the last node in the m_Nodes vector */
+  void DestroyLastNode();
+  /** Checks the amount of slices in the image from the USDevice and creates as many Nodes as there are slices */
+  void UpdateAmountOfOutputs();
+
+  /** This function just checks how many nodes there are currently and sets the laser image to a jet transparent colormap. */
+  void UpdateLevelWindows();
+  bool m_ForceRequestUpdateAll;
+
+  void SetColormap(mitk::DataNode::Pointer node, mitk::LookupTable::LookupTableType type);
+
+  /** The image that holds all data given by the USDevice.*/
+  mitk::Image::Pointer                m_Image;
 
 
-    void SetTimerIntervals(int intervalPipeline, int interval2D, int interval3D);
-    /** This timer triggers periodic updates to the pipeline */
-    QTimer* m_UpdateTimer;
-    QTimer* m_RenderingTimer2d;
-    QTimer* m_RenderingTimer3d;
+  /** The seperated slices from m_Image */
+  std::vector<mitk::Image::Pointer>   m_curOutput;
 
-    /** These clocks are used to compute the framerate in the methods DisplayImage(),RenderImage2d() and RenderImage3d(). */
-    QTime  m_Clock;
-    QTime  m_Clock2d;
-    QTime  m_Clock3d;
+  /** The old geometry of m_Image. It is needed to check if the geometry changed (e.g. because
+   *  the zoom factor was modified) and the image needs to be reinitialized. */
+  mitk::SlicedGeometry3D::Pointer m_OldGeometry;
 
-    /** A counter to comute the framerate. */
-    int m_FrameCounterPipeline;
-    int m_FrameCounter2d;
-    int m_FrameCounter3d;
-    int m_FPSPipeline, m_FPS2d, m_FPS3d;
+  QList<ctkServiceReference>    m_CustomWidgetServiceReference;
 
-    /** Stores the properties of some QWidgets (and the tool storage file name) to QSettings.*/
-    void StoreUISettings();
-
-    /** Loads the properties of some QWidgets (and the tool storage file name) from QSettings.*/
-    void LoadUISettings();
-
-    /** The node that we feed images into.*/
-    mitk::DataNode::Pointer m_Node;
-
-    /** The image that is hold by the node above.*/
-    mitk::Image::Pointer m_Image;
-
-    /** The old geometry of m_Image. It is needed to check if the geometry changed (e.g. because
-     *  the zoom factor was modified) and the image needs to be reinitialized. */
-    mitk::SlicedGeometry3D::Pointer m_OldGeometry;
-
-    Ui::UltrasoundSupportControls m_Controls;
-
-    QmitkUSAbstractCustomWidget*  m_ControlCustomWidget;
-    QmitkUSControlsBModeWidget*   m_ControlBModeWidget;
-    QmitkUSControlsDopplerWidget* m_ControlDopplerWidget;
-    QmitkUSControlsProbesWidget*  m_ControlProbesWidget;
-
-    QList<ctkServiceReference>    m_CustomWidgetServiceReference;
-
-    bool m_ImageAlreadySetToNode;
-    unsigned int m_CurrentImageWidth;
-    unsigned int m_CurrentImageHeight;
-    double m_CurrentDynamicRange;
+  double m_CurrentDynamicRange;
 };
 
 #endif // UltrasoundSupport_h

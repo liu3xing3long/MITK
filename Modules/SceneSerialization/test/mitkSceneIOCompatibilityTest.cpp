@@ -14,16 +14,24 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 ===================================================================*/
 
-//MITK
-#include "mitkTestingMacros.h"
+// MITK
 #include "mitkRenderingTestHelper.h"
+#include "mitkTestingMacros.h"
 
-//VTK
+// VTK
 #include <vtkRegressionTestImage.h>
 
-
-int mitkSceneIOCompatibilityTest(int argc, char* argv[])
+int mitkSceneIOCompatibilityTest(int argc, char *argv[])
 {
+  try
+  {
+    mitk::RenderingTestHelper openGlTest(640, 480);
+  }
+  catch (const mitk::TestNotRunException &e)
+  {
+    MITK_WARN << "Test not run: " << e.GetDescription();
+    return 77;
+  }
   // Load all arguments but last into a DataStorage,
   // Take last argument as reference rendering.
   //
@@ -35,16 +43,15 @@ int mitkSceneIOCompatibilityTest(int argc, char* argv[])
   mitk::RenderingTestHelper renderingHelper(200, 200, argc, argv);
 
   // Usage of CompareRenderWindowAgainstReference: See documentation of mitkRenderingTestHelper
-  MITK_TEST_CONDITION( renderingHelper.CompareRenderWindowAgainstReference(argc, argv) == true,
-                       "CompareRenderWindowAgainstReference test result positive?" );
+  MITK_TEST_CONDITION(renderingHelper.CompareRenderWindowAgainstReference(argc, argv) == true,
+                      "CompareRenderWindowAgainstReference test result positive?");
 
   // You can use this to generate a new reference
   // on your platform or after changes:
-  if(false)
+  if (false)
   {
     renderingHelper.SaveReferenceScreenShot("/where/you/want.png");
   }
 
   MITK_TEST_END();
 }
-

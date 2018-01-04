@@ -70,7 +70,7 @@ public:
   ///
   /// \brief Standard dtor.
   ///
-  virtual ~QmitkDataManagerView();
+  ~QmitkDataManagerView() override;
 
 public slots:
   ///
@@ -178,7 +178,7 @@ protected:
   ///
   /// \brief Create the view here.
   ///
-  virtual void CreateQtPartControl(QWidget* parent) override;
+  void CreateQtPartControl(QWidget* parent) override;
 
   void SetFocus() override;
 
@@ -190,7 +190,7 @@ protected:
   ///
   /// React to node changes. Overridden from QmitkAbstractView.
   ///
-  virtual void NodeChanged(const mitk::DataNode* /*node*/) override;
+  void NodeChanged(const mitk::DataNode* /*node*/) override;
 protected:
 
   QWidget* m_Parent;
@@ -226,7 +226,8 @@ protected:
 
 
   ///# A list of ALL actions for the Context Menu
-  std::vector< std::pair< QmitkNodeDescriptor*, QAction* > > m_DescriptorActionList;
+  using DescriptorActionListType = std::vector< std::pair< QmitkNodeDescriptor*, QAction* > >;
+  DescriptorActionListType m_DescriptorActionList;
 
   /// A Slider widget to change the opacity of a node
   QSlider* m_OpacitySlider;

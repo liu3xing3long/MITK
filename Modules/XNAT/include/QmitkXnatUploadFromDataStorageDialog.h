@@ -6,12 +6,14 @@
 #include "MitkXNATExports.h"
 #include <mitkDataNode.h>
 
-namespace Ui {
-class QmitkXnatUploadFromDataStorageDialog;
+namespace Ui
+{
+  class QmitkXnatUploadFromDataStorageDialog;
 }
 
-namespace mitk {
-class DataStorage;
+namespace mitk
+{
+  class DataStorage;
 }
 
 class MITKXNAT_EXPORT QmitkXnatUploadFromDataStorageDialog : public QDialog
@@ -20,9 +22,9 @@ class MITKXNAT_EXPORT QmitkXnatUploadFromDataStorageDialog : public QDialog
 
 public:
   explicit QmitkXnatUploadFromDataStorageDialog(QWidget *parent = 0);
-  ~QmitkXnatUploadFromDataStorageDialog();
+  ~QmitkXnatUploadFromDataStorageDialog() override;
 
-  void SetDataStorage(mitk::DataStorage* ds);
+  void SetDataStorage(mitk::DataStorage *ds);
   mitk::DataNode::Pointer GetSelectedNode();
 
 protected slots:
@@ -32,7 +34,8 @@ protected slots:
   void OnCancel();
 
   void OnMITKProjectFileNameEntered(const QString &text);
-  void OnDataSelected(const mitk::DataNode*);
+  void OnDataSelected(const mitk::DataNode *);
+
 private:
   Ui::QmitkXnatUploadFromDataStorageDialog *ui;
 

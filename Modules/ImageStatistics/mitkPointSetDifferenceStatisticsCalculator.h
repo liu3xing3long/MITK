@@ -90,14 +90,14 @@ protected:
 
   PointSetDifferenceStatisticsCalculator();
   PointSetDifferenceStatisticsCalculator(mitk::PointSet::Pointer,mitk::PointSet::Pointer);
-  virtual ~PointSetDifferenceStatisticsCalculator();
+  ~PointSetDifferenceStatisticsCalculator() override;
 
   /*!
   \brief Method for computing the complete statistics of the differences between the given point sets.
   */
   void ComputeStatistics();
 
-  mitk::ImageStatisticsCalculator::Statistics m_Statistics; ///< struct holding the statistics
+  mitk::ImageStatisticsCalculator::StatisticsContainer::Pointer m_Statistics; ///< struct holding the statistics
   std::vector<double> m_DifferencesVector; ///< vector holding the differences between the corresponding points
   std::vector<double> m_SquaredDifferencesVector; ///< vector holding the squared differences between the corresponding points
   mitk::PointSet::Pointer m_PointSet1; ///< first point set used for comparison

@@ -50,21 +50,6 @@ if(NOT PATCH_COMMAND)
 endif()
 
 #-----------------------------------------------------------------------------
-# Qt options for external projects and MITK
-#-----------------------------------------------------------------------------
-
-if(MITK_USE_QT)
-  set(qt_project_args -DDESIRED_QT_VERSION:STRING=${DESIRED_QT_VERSION})
-else()
-  set(qt_project_args )
-endif()
-
-if(MITK_USE_Qt4)
-  list(APPEND qt_project_args
-       -DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE} )
-endif()
-
-#-----------------------------------------------------------------------------
 # ExternalProjects
 #-----------------------------------------------------------------------------
 
@@ -179,7 +164,7 @@ set(ep_common_args
   -DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}
   -DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}
   -DCMAKE_C_FLAGS:STRING=${CMAKE_C_FLAGS}
-  "-DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS} ${MITK_CXX11_FLAG}"
+  "-DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS} ${MITK_CXX14_FLAG}"
   #debug flags
   -DCMAKE_CXX_FLAGS_DEBUG:STRING=${CMAKE_CXX_FLAGS_DEBUG}
   -DCMAKE_C_FLAGS_DEBUG:STRING=${CMAKE_C_FLAGS_DEBUG}
@@ -231,7 +216,18 @@ set(mitk_depends )
 # Include external projects
 include(CMakeExternals/MITKData.cmake)
 foreach(p ${external_projects})
-  include(CMakeExternals/${p}.cmake)
+  if(EXISTS ${CMAKE_SOURCE_DIR}/CMakeExternals/${p}.cmake)
+    include(CMakeExternals/${p}.cmake)
+  else()
+    foreach(MITK_EXTENSION_DIR ${MITK_EXTENSION_DIRS})
+      get_filename_component(MITK_EXTENSION_DIR ${MITK_EXTENSION_DIR} ABSOLUTE)
+      set(MITK_CMAKE_EXTERNALS_EXTENSION_DIR ${MITK_EXTENSION_DIR}/CMakeExternals)
+      if(EXISTS ${MITK_CMAKE_EXTERNALS_EXTENSION_DIR}/${p}.cmake)
+        include(${MITK_CMAKE_EXTERNALS_EXTENSION_DIR}/${p}.cmake)
+        break()
+      endif()
+    endforeach()
+  endif()
 
   list(APPEND mitk_superbuild_ep_args
        -DMITK_USE_${p}:BOOL=${MITK_USE_${p}}
@@ -257,7 +253,8 @@ set(mitk_cmake_boolean_args
   MITK_BUILD_ALL_APPS
   MITK_BUILD_EXAMPLES
 
-  MITK_USE_QT
+  MITK_USE_Qt5
+  MITK_USE_Qt5_WebEngine
   MITK_USE_SYSTEM_Boost
   MITK_USE_BLUEBERRY
   MITK_USE_OpenCL
@@ -337,6 +334,12 @@ if(MITK_USE_Python)
       )
 endif()
 
+if(Eigen_INCLUDE_DIR)
+    list(APPEND mitk_optional_cache_args
+      -DEigen_INCLUDE_DIR:PATH=${Eigen_INCLUDE_DIR}
+    )
+endif()
+
 set(proj MITK-Configure)
 
 ExternalProject_Add(${proj}
@@ -351,6 +354,9 @@ ExternalProject_Add(${proj}
     "-DCMAKE_LIBRARY_PATH:PATH=${CMAKE_LIBRARY_PATH}"
     "-DCMAKE_INCLUDE_PATH:PATH=${CMAKE_INCLUDE_PATH}"
     # --------------- Compile options ----------------
+    -DCMAKE_CXX_EXTENSIONS:STRING=${CMAKE_CXX_EXTENSIONS}
+    -DCMAKE_CXX_STANDARD:STRING=${CMAKE_CXX_STANDARD}
+    -DCMAKE_CXX_STANDARD_REQUIRED:BOOL=${CMAKE_CXX_STANDARD_REQUIRED}
     -DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}
     -DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}
     "-DCMAKE_C_FLAGS:STRING=${CMAKE_C_FLAGS} ${MITK_ADDITIONAL_C_FLAGS}"
@@ -387,7 +393,7 @@ ExternalProject_Add(${proj}
     -DMITK_WHITELIST:STRING=${MITK_WHITELIST}
     -DMITK_WHITELISTS_EXTERNAL_PATH:STRING=${MITK_WHITELISTS_EXTERNAL_PATH}
     -DMITK_WHITELISTS_INTERNAL_PATH:STRING=${MITK_WHITELISTS_INTERNAL_PATH}
-    ${qt_project_args}
+    -DMITK_EXTENSION_DIRS:STRING=${MITK_EXTENSION_DIRS}
     -DMITK_ACCESSBYITK_INTEGRAL_PIXEL_TYPES:STRING=${MITK_ACCESSBYITK_INTEGRAL_PIXEL_TYPES}
     -DMITK_ACCESSBYITK_FLOATING_PIXEL_TYPES:STRING=${MITK_ACCESSBYITK_FLOATING_PIXEL_TYPES}
     -DMITK_ACCESSBYITK_COMPOSITE_PIXEL_TYPES:STRING=${MITK_ACCESSBYITK_COMPOSITE_PIXEL_TYPES}
@@ -397,7 +403,6 @@ ExternalProject_Add(${proj}
     -DMITK_DATA_DIR:PATH=${MITK_DATA_DIR}
     -DMITK_EXTERNAL_PROJECT_PREFIX:PATH=${ep_prefix}
     -DCppMicroServices_DIR:PATH=${CppMicroServices_DIR}
-    -DMITK_KWSTYLE_EXECUTABLE:FILEPATH=${MITK_KWSTYLE_EXECUTABLE}
     -DDCMTK_CMAKE_DEBUG_POSTFIX:STRING=${DCMTK_CMAKE_DEBUG_POSTFIX}
     -DBOOST_ROOT:PATH=${BOOST_ROOT}
     -DBOOST_LIBRARYDIR:PATH=${BOOST_LIBRARYDIR}

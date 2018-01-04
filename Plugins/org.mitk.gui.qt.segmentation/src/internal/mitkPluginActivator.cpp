@@ -53,7 +53,7 @@ void PluginActivator::start(ctkPluginContext *context)
 
 void PluginActivator::stop(ctkPluginContext *)
 {
-  this->m_context = NULL;
+  this->m_context = nullptr;
 }
 
 PluginActivator* PluginActivator::getDefault()
@@ -65,7 +65,3 @@ ctkPluginContext*PluginActivator::getContext()
 {
   return m_context;
 }
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-  Q_EXPORT_PLUGIN2(org_mitk_gui_qt_segmentation, mitk::PluginActivator)
-#endif

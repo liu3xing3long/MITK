@@ -17,8 +17,8 @@ See LICENSE.txt or http://www.mitk.org for details.
 #ifndef MITK_SHOW_SEGMENTATION_AS_SMOOTHED_SURFACE_H
 #define MITK_SHOW_SEGMENTATION_AS_SMOOTHED_SURFACE_H
 
-#include <MitkSegmentationExports.h>
 #include "mitkSegmentationSink.h"
+#include <MitkSegmentationExports.h>
 #include <mitkSurface.h>
 
 namespace mitk
@@ -37,7 +37,7 @@ namespace mitk
 
   private:
     ShowSegmentationAsSmoothedSurface();
-    ~ShowSegmentationAsSmoothedSurface();
+    ~ShowSegmentationAsSmoothedSurface() override;
 
     Surface::Pointer m_Surface;
   };

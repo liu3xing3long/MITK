@@ -70,13 +70,13 @@ int main(int argc, char* argv[])
   parser.setContributor("MBI");
 
   // Params parsing
-  map<string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
+  std::map<std::string, us::Any> parsedArgs = parser.parseArguments(argc, argv);
   if (parsedArgs.size()==0)
     return EXIT_FAILURE;
 
-  std::string inputdir = us::any_cast<string>(parsedArgs["inputdir"]);
-  std::string outputdir = us::any_cast<string>(parsedArgs["outputdir"]);
-  std::string classmask = us::any_cast<string>(parsedArgs["classmask"]);
+  std::string inputdir = us::any_cast<std::string>(parsedArgs["inputdir"]);
+  std::string outputdir = us::any_cast<std::string>(parsedArgs["outputdir"]);
+  std::string classmask = us::any_cast<std::string>(parsedArgs["classmask"]);
 
   int treecount = parsedArgs.count("treecount") ? us::any_cast<int>(parsedArgs["treecount"]) : 50;
   int treedepth = parsedArgs.count("treedepth") ? us::any_cast<int>(parsedArgs["treedepth"]) : 50;
@@ -84,7 +84,7 @@ int main(int argc, char* argv[])
   float precision = parsedArgs.count("precision") ? us::any_cast<float>(parsedArgs["precision"]) : mitk::eps;
   float fraction = parsedArgs.count("fraction") ? us::any_cast<float>(parsedArgs["fraction"]) : 0.6;
   bool withreplacement = parsedArgs.count("replacment") ? us::any_cast<float>(parsedArgs["replacment"]) : true;
-  std::string filt_select =/* parsedArgs.count("select") ? us::any_cast<string>(parsedArgs["select"]) :*/ "*.nrrd";
+  std::string filt_select =/* parsedArgs.count("select") ? us::any_cast<std::string>(parsedArgs["select"]) :*/ "*.nrrd";
 
   QString filter(filt_select.c_str());
 
@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
   auto strl = dir.entryList(filter.split(" "),QDir::Files);
 
   // load class mask
-  mitk::Image::Pointer mask = mitk::IOUtil::LoadImage(classmask);
+  mitk::Image::Pointer mask = dynamic_cast<mitk::Image*>(mitk::IOUtil::Load(classmask)[0].GetPointer());
   unsigned int num_samples = 0;
   mitk::CLUtil::CountVoxel(mask,num_samples);
 
@@ -104,7 +104,7 @@ int main(int argc, char* argv[])
   for(int i = 0 ; i < strl.size(); i++)
   {
     // load feature image
-    mitk::Image::Pointer img = mitk::IOUtil::LoadImage(inputdir + strl[i].toStdString());
+    mitk::Image::Pointer img = dynamic_cast<mitk::Image*>(mitk::IOUtil::Load(inputdir + strl[i].toStdString())[0].GetPointer());
     // transfom it into a [num_samples, 1] vector depending on the classmask
     Eigen::MatrixXd _x = mitk::CLUtil::Transform<double>(img,mask);
     // replace i-th (empty) col with feature vector in _x

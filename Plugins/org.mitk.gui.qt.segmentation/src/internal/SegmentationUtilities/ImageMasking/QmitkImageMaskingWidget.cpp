@@ -26,7 +26,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <mitkSliceNavigationController.h>
 #include <mitkSurfaceToImageFilter.h>
 
-#include <qmessagebox.h>
+#include <QMessageBox>
 
 static const char* const HelpText = "Select a regular image and a binary image";
 
@@ -51,7 +51,7 @@ QmitkImageMaskingWidget::QmitkImageMaskingWidget(mitk::SliceNavigationController
   if( m_Controls.dataSelectionWidget->GetSelection(0).IsNotNull() &&
     m_Controls.dataSelectionWidget->GetSelection(1).IsNotNull() )
   {
-    this->OnSelectionChanged( 0, m_Controls.dataSelectionWidget->GetSelection(0));
+    this->OnSelectionChanged(0, m_Controls.dataSelectionWidget->GetSelection(0));
   }
 }
 

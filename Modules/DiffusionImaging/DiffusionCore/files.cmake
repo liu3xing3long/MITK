@@ -1,7 +1,6 @@
 set(CPP_FILES
 
   # DicomImport
-  DicomImport/mitkDicomDiffusionImageReader.cpp
   # DicomImport/mitkGroupDiffusionHeadersFilter.cpp
   DicomImport/mitkDicomDiffusionImageHeaderReader.cpp
   DicomImport/mitkGEDicomDiffusionImageHeaderReader.cpp
@@ -16,7 +15,6 @@ set(CPP_FILES
   DicomImport/mitkDiffusionHeaderSiemensMosaicDICOMFileReader.cpp
   DicomImport/mitkDiffusionHeaderGEDICOMFileReader.cpp
   DicomImport/mitkDiffusionHeaderPhilipsDICOMFileReader.cpp
-
 
   # DataStructures -> DWI
   IODataStructures/DiffusionWeightedImages/mitkDiffusionImageHeaderInformation.cpp
@@ -35,12 +33,15 @@ set(CPP_FILES
   IODataStructures/Properties/mitkGradientDirectionsPropertySerializer.cpp
   IODataStructures/Properties/mitkMeasurementFramePropertySerializer.cpp
 
-  # DataStructures -> QBall
-  IODataStructures/QBallImages/mitkQBallImageSource.cpp
-  IODataStructures/QBallImages/mitkQBallImage.cpp
+  # DataStructures -> Odf
+  IODataStructures/OdfImages/mitkOdfImageSource.cpp
+  IODataStructures/OdfImages/mitkOdfImage.cpp
 
   # DataStructures -> Tensor
   IODataStructures/TensorImages/mitkTensorImage.cpp
+
+  # DataStructures -> Peaks
+  IODataStructures/mitkPeakImage.cpp
 
   Rendering/vtkMaskedProgrammableGlyphFilter.cpp
   Rendering/mitkVectorImageVtkGlyphMapper3D.cpp
@@ -73,76 +74,83 @@ set(CPP_FILES
 
 set(H_FILES
   # function Collection
-  mitkDiffusionFunctionCollection.h
+  include/mitkDiffusionFunctionCollection.h
 
   # Rendering
-  Rendering/mitkOdfVtkMapper2D.h
+  include/Rendering/mitkOdfVtkMapper2D.h
 
   # Reconstruction
-  Algorithms/Reconstruction/itkDiffusionQballReconstructionImageFilter.h
-  Algorithms/Reconstruction/mitkTeemDiffusionTensor3DReconstructionImageFilter.h
-  Algorithms/Reconstruction/itkAnalyticalDiffusionQballReconstructionImageFilter.h
-  Algorithms/Reconstruction/itkDiffusionMultiShellQballReconstructionImageFilter.h
-  Algorithms/Reconstruction/itkPointShell.h
-  Algorithms/Reconstruction/itkOrientationDistributionFunction.h
-  Algorithms/Reconstruction/itkDiffusionIntravoxelIncoherentMotionReconstructionImageFilter.h
+  include/Algorithms/Reconstruction/itkDiffusionQballReconstructionImageFilter.h
+  include/Algorithms/Reconstruction/mitkTeemDiffusionTensor3DReconstructionImageFilter.h
+  include/Algorithms/Reconstruction/itkAnalyticalDiffusionQballReconstructionImageFilter.h
+  include/Algorithms/Reconstruction/itkDiffusionMultiShellQballReconstructionImageFilter.h
+  include/Algorithms/Reconstruction/itkPointShell.h
+  include/Algorithms/Reconstruction/itkOrientationDistributionFunction.h
+  include/Algorithms/Reconstruction/itkDiffusionIntravoxelIncoherentMotionReconstructionImageFilter.h
+  include/Algorithms/Reconstruction/itkDiffusionKurtosisReconstructionImageFilter.h
+  include/Algorithms/Reconstruction/itkBallAndSticksImageFilter.h
+  include/Algorithms/Reconstruction/itkMultiTensorImageFilter.h
+
+  # Fitting functions
+  include/Algorithms/Reconstruction/FittingFunctions/mitkAbstractFitter.h
+  include/Algorithms/Reconstruction/FittingFunctions/mitkMultiTensorFitter.h
+  include/Algorithms/Reconstruction/FittingFunctions/mitkBallStickFitter.h
+
 
   # MultishellProcessing
-  Algorithms/Reconstruction/MultishellProcessing/itkRadialMultishellToSingleshellImageFilter.h
-  Algorithms/Reconstruction/MultishellProcessing/itkDWIVoxelFunctor.h
-  Algorithms/Reconstruction/MultishellProcessing/itkADCAverageFunctor.h
-  Algorithms/Reconstruction/MultishellProcessing/itkKurtosisFitFunctor.h
-  Algorithms/Reconstruction/MultishellProcessing/itkBiExpFitFunctor.h
-  Algorithms/Reconstruction/MultishellProcessing/itkADCFitFunctor.h
+  include/Algorithms/Reconstruction/MultishellProcessing/itkRadialMultishellToSingleshellImageFilter.h
+  include/Algorithms/Reconstruction/MultishellProcessing/itkDWIVoxelFunctor.h
+  include/Algorithms/Reconstruction/MultishellProcessing/itkADCAverageFunctor.h
+  include/Algorithms/Reconstruction/MultishellProcessing/itkKurtosisFitFunctor.h
+  include/Algorithms/Reconstruction/MultishellProcessing/itkBiExpFitFunctor.h
+  include/Algorithms/Reconstruction/MultishellProcessing/itkADCFitFunctor.h
 
   # Properties
-  IODataStructures/Properties/mitkBValueMapProperty.h
-  IODataStructures/Properties/mitkGradientDirectionsProperty.h
-  IODataStructures/Properties/mitkMeasurementFrameProperty.h
-  IODataStructures/Properties/mitkDiffusionPropertyHelper.h
+  include/IODataStructures/Properties/mitkBValueMapProperty.h
+  include/IODataStructures/Properties/mitkGradientDirectionsProperty.h
+  include/IODataStructures/Properties/mitkMeasurementFrameProperty.h
+  include/IODataStructures/Properties/mitkDiffusionPropertyHelper.h
 
-  IODataStructures/DiffusionWeightedImages/mitkDiffusionImageTransformedCreationFilter.h
+  include/IODataStructures/DiffusionWeightedImages/mitkDiffusionImageTransformedCreationFilter.h
 
   # Algorithms
-  Algorithms/itkDiffusionQballGeneralizedFaImageFilter.h
-  Algorithms/itkDiffusionQballPrepareVisualizationImageFilter.h
-  Algorithms/itkElectrostaticRepulsionDiffusionGradientReductionFilter.h
-  Algorithms/itkTensorDerivedMeasurementsFilter.h
-  Algorithms/itkBrainMaskExtractionImageFilter.h
-  Algorithms/itkB0ImageExtractionImageFilter.h
-  Algorithms/itkB0ImageExtractionToSeparateImageFilter.h
-  Algorithms/itkTensorImageToDiffusionImageFilter.h
-  Algorithms/itkTensorToL2NormImageFilter.h
-  Algorithms/itkGaussianInterpolateImageFunction.h
-  Algorithms/mitkPartialVolumeAnalysisHistogramCalculator.h
-  Algorithms/mitkPartialVolumeAnalysisClusteringCalculator.h
-  Algorithms/itkDiffusionTensorPrincipalDirectionImageFilter.h
-  Algorithms/itkCartesianToPolarVectorImageFilter.h
-  Algorithms/itkPolarToCartesianVectorImageFilter.h
-  Algorithms/itkDistanceMapFilter.h
-  Algorithms/itkProjectionFilter.h
-  Algorithms/itkResidualImageFilter.h
-  Algorithms/itkExtractChannelFromRgbaImageFilter.h
-  Algorithms/itkTensorReconstructionWithEigenvalueCorrectionFilter.h
-  Algorithms/itkMergeDiffusionImagesFilter.h
-  Algorithms/itkDwiPhantomGenerationFilter.h
-  Algorithms/itkFiniteDiffOdfMaximaExtractionFilter.h
-  Algorithms/itkMrtrixPeakImageConverter.h
-  Algorithms/itkFslPeakImageConverter.h
-  Algorithms/itkShCoefficientImageImporter.h
-  Algorithms/itkShCoefficientImageExporter.h
-  Algorithms/itkOdfMaximaExtractionFilter.h
-  Algorithms/itkResampleDwiImageFilter.h
-  Algorithms/itkDwiGradientLengthCorrectionFilter.h
-  Algorithms/itkAdcImageFilter.h
-  Algorithms/itkDwiNormilzationFilter.h
-  Algorithms/itkSplitDWImageFilter.h
-  Algorithms/itkRemoveDwiChannelFilter.h
-  Algorithms/itkExtractDwiChannelFilter.h
+  include/Algorithms/itkDiffusionOdfGeneralizedFaImageFilter.h
+  include/Algorithms/itkDiffusionOdfPrepareVisualizationImageFilter.h
+  include/Algorithms/itkElectrostaticRepulsionDiffusionGradientReductionFilter.h
+  include/Algorithms/itkTensorDerivedMeasurementsFilter.h
+  include/Algorithms/itkBrainMaskExtractionImageFilter.h
+  include/Algorithms/itkB0ImageExtractionImageFilter.h
+  include/Algorithms/itkB0ImageExtractionToSeparateImageFilter.h
+  include/Algorithms/itkTensorImageToDiffusionImageFilter.h
+  include/Algorithms/itkTensorToL2NormImageFilter.h
+  include/Algorithms/itkGaussianInterpolateImageFunction.h
+  include/Algorithms/mitkPartialVolumeAnalysisHistogramCalculator.h
+  include/Algorithms/mitkPartialVolumeAnalysisClusteringCalculator.h
+  include/Algorithms/itkDiffusionTensorPrincipalDirectionImageFilter.h
+  include/Algorithms/itkCartesianToPolarVectorImageFilter.h
+  include/Algorithms/itkPolarToCartesianVectorImageFilter.h
+  include/Algorithms/itkDistanceMapFilter.h
+  include/Algorithms/itkProjectionFilter.h
+  include/Algorithms/itkResidualImageFilter.h
+  include/Algorithms/itkExtractChannelFromRgbaImageFilter.h
+  include/Algorithms/itkTensorReconstructionWithEigenvalueCorrectionFilter.h
+  include/Algorithms/itkMergeDiffusionImagesFilter.h
+  include/Algorithms/itkFiniteDiffOdfMaximaExtractionFilter.h
+  include/Algorithms/itkShCoefficientImageImporter.h
+  include/Algorithms/itkShCoefficientImageExporter.h
+  include/Algorithms/itkOdfMaximaExtractionFilter.h
+  include/Algorithms/itkResampleDwiImageFilter.h
+  include/Algorithms/itkDwiGradientLengthCorrectionFilter.h
+  include/Algorithms/itkAdcImageFilter.h
+  include/Algorithms/itkDwiNormilzationFilter.h
+  include/Algorithms/itkSplitDWImageFilter.h
+  include/Algorithms/itkRemoveDwiChannelFilter.h
+  include/Algorithms/itkExtractDwiChannelFilter.h
+  include/Algorithms/itkFlipPeaksFilter.h
 
-  Algorithms/Registration/mitkDWIHeadMotionCorrectionFilter.h
-  Algorithms/itkNonLocalMeansDenoisingFilter.h
-  Algorithms/itkVectorImageToImageFilter.h
+  include/Algorithms/Registration/mitkDWIHeadMotionCorrectionFilter.h
+  include/Algorithms/itkNonLocalMeansDenoisingFilter.h
+  include/Algorithms/itkVectorImageToImageFilter.h
 
 
 )

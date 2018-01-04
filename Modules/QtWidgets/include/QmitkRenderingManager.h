@@ -14,15 +14,14 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 ===================================================================*/
 
-
 #ifndef QMITKRENDERINGMANAGER_H_HEADER_INCLUDED_C135A197
 #define QMITKRENDERINGMANAGER_H_HEADER_INCLUDED_C135A197
 
 #include <MitkQtWidgetsExports.h>
 
 #include "mitkRenderingManager.h"
-#include <QObject>
 #include <QEvent>
+#include <QObject>
 
 class QmitkRenderingManagerInternal;
 class QmitkRenderingManagerFactory;
@@ -45,31 +44,30 @@ class MITKQTWIDGETS_EXPORT QmitkRenderingManager : public QObject, public mitk::
   Q_OBJECT
 
 public:
-  mitkClassMacro( QmitkRenderingManager, mitk::RenderingManager );
-  virtual ~QmitkRenderingManager();
+  mitkClassMacro(QmitkRenderingManager, mitk::RenderingManager);
+  ~QmitkRenderingManager() override;
 
-  virtual void DoMonitorRendering() override;
-  virtual void DoFinishAbortRendering() override;
+  void DoMonitorRendering() override;
+  void DoFinishAbortRendering() override;
 
-  virtual bool event( QEvent *event ) override;
+  bool event(QEvent *event) override;
 
 protected:
   itkFactorylessNewMacro(Self);
 
   QmitkRenderingManager();
 
-  virtual void GenerateRenderingRequestEvent() override;
+  void GenerateRenderingRequestEvent() override;
 
-  virtual void StartOrResetTimer() override;
+  void StartOrResetTimer() override;
 
   int pendingTimerCallbacks;
 
- protected slots:
+protected slots:
 
   void TimerCallback();
 
 private:
-
   friend class QmitkRenderingManagerFactory;
 };
 
@@ -81,8 +79,7 @@ public:
     RenderingRequest = QEvent::MaxUser - 1024
   };
 
-  QmitkRenderingRequestEvent()
-  : QEvent( (QEvent::Type) RenderingRequest ) {};
+  QmitkRenderingRequestEvent() : QEvent((QEvent::Type)RenderingRequest){};
 };
 
 #endif /* MITKRenderingManager_H_HEADER_INCLUDED_C135A197 */

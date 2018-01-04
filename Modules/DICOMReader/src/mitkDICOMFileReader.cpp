@@ -58,6 +58,7 @@ mitk::DICOMFileReader
 ::SetConfigurationLabel(const std::string& label)
 {
   m_ConfigLabel = label;
+  this->Modified();
 }
 
 std::string
@@ -72,6 +73,7 @@ mitk::DICOMFileReader
 ::SetConfigurationDescription(const std::string& desc)
 {
   m_ConfigDescription = desc;
+  this->Modified();
 }
 
 std::string
@@ -83,9 +85,10 @@ mitk::DICOMFileReader
 
 void
 mitk::DICOMFileReader
-::SetInputFiles(StringList filenames)
+::SetInputFiles( const StringList& filenames)
 {
   m_InputFilenames = filenames;
+  this->Modified();
 }
 
 const mitk::StringList&
@@ -198,16 +201,17 @@ mitk::DICOMFileReader
 }
 
 
-std::unordered_map<const char*, mitk::DICOMTag> mitk::DICOMFileReader::GetAdditionalTagsOfInterest() const
+mitk::DICOMFileReader::AdditionalTagsMapType mitk::DICOMFileReader::GetAdditionalTagsOfInterest() const
 {
   return m_AdditionalTagsOfInterest;
 }
 
 
 void mitk::DICOMFileReader::SetAdditionalTagsOfInterest(
-  const std::unordered_map<const char*, mitk::DICOMTag>& tagList )
+  const AdditionalTagsMapType& tagList)
 {
   m_AdditionalTagsOfInterest = tagList;
+  this->Modified();
 }
 
 
@@ -215,6 +219,7 @@ void mitk::DICOMFileReader::SetTagLookupTableToPropertyFunctor(
   mitk::DICOMImageBlockDescriptor::TagLookupTableToPropertyFunctor functor )
 {
   m_TagLookupTableToPropertyFunctor = functor;
+  this->Modified();
 }
 
 mitk::DICOMImageBlockDescriptor::TagLookupTableToPropertyFunctor

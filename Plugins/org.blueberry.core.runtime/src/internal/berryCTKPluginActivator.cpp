@@ -36,8 +36,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "berryRegistryContributor.h"
 
 #include <QCoreApplication>
-#include <QtPlugin>
-
 #include <QDebug>
 
 namespace berry {
@@ -139,10 +137,21 @@ QString org_blueberry_core_runtime_Activator::getPluginId(void *symbol)
 
 #include <ctkBackTrace.h>
 #include <windows.h>
+
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable: 4091)
+#endif
+
 #include <dbghelp.h>
+
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
+
 QString org_blueberry_core_runtime_Activator::getPluginId(void *symbol)
 {
-  if (symbol == NULL) return QString();
+  if (symbol == nullptr) return QString();
 
   if (ctk::DebugSymInitialize())
   {
@@ -210,7 +219,7 @@ void org_blueberry_core_runtime_Activator::startRegistry()
   if (property.compare("false", Qt::CaseInsensitive) == 0) return;
 
   // check to see if we need to use null as a userToken
-  if (context->getProperty(RegistryConstants::PROP_REGISTRY_NULL_USER_TOKEN).toString().compare("true", Qt::CaseInsensitive) == 0)
+  if (context->getProperty(RegistryConstants::PROP_REGISTRY_nullptr_USER_TOKEN).toString().compare("true", Qt::CaseInsensitive) == 0)
   {
     userRegistryKey.reset(nullptr);
   }
@@ -286,7 +295,3 @@ void org_blueberry_core_runtime_Activator::stopAppContainer()
 }
 
 }
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
-  Q_EXPORT_PLUGIN2(org_blueberry_core_runtime, berry::org_blueberry_core_runtime_Activator)
-#endif

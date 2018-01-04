@@ -50,8 +50,6 @@ See LICENSE.txt or http://www.mitk.org for details.
  * \sa QmitkWelcomePage Editor
  */
 
-class QWebView ;
-
 class QmitkMitkWorkbenchIntroPart : public berry::QtIntroPart
 {
 
@@ -61,10 +59,10 @@ class QmitkMitkWorkbenchIntroPart : public berry::QtIntroPart
 public:
 
   QmitkMitkWorkbenchIntroPart();
- ~QmitkMitkWorkbenchIntroPart();
+ ~QmitkMitkWorkbenchIntroPart() override;
 
 
-  virtual void CreateQtPartControl(QWidget *parent) override;
+  void CreateQtPartControl(QWidget *parent) override;
 
   void StandbyStateChanged(bool) override;
 
@@ -72,16 +70,12 @@ public:
 
   virtual void CreateConnections();
 
-
-protected slots:
-
-
-  void DelegateMeTo(const QUrl& ShowMeNext);
-
 protected:
 
   Ui::QmitkWelcomeScreenViewControls* m_Controls;
-  QWebView* m_view;
+
+  class Impl;
+  Impl* m_Impl;
 };
 
 #endif /* QMITKWORKBENCHINTROPART_H_ */

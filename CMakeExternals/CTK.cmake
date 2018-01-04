@@ -10,15 +10,12 @@ if(MITK_USE_CTK)
   endif()
 
   set(proj CTK)
-  set(proj_DEPENDENCIES )
+  set(proj_DEPENDENCIES DCMTK)
   set(CTK_DEPENDS ${proj})
 
   if(NOT DEFINED CTK_DIR)
 
-    set(revision_tag b721b7ca)
-    #IF(${proj}_REVISION_TAG)
-    #  SET(revision_tag ${${proj}_REVISION_TAG})
-    #ENDIF()
+    set(revision_tag 0887c8b2) # From https://github.com/kislinsk/CTK.git
 
     set(ctk_optional_cache_args )
     if(MITK_USE_Python)
@@ -42,32 +39,16 @@ if(MITK_USE_CTK)
       )
     endif()
 
-    if(MITK_USE_DCMTK)
+    if(NOT MITK_USE_Python)
       list(APPEND ctk_optional_cache_args
-           -DDCMTK_DIR:PATH=${DCMTK_DIR}
-          )
-      if(NOT MITK_USE_Python)
-        list(APPEND ctk_optional_cache_args
-            -DDCMTK_CMAKE_DEBUG_POSTFIX:STRING=d
-            )
-      endif()
-      list(APPEND proj_DEPENDENCIES DCMTK)
-    else()
-      list(APPEND ctk_optional_cache_args
-           -DDCMTK_URL:STRING=${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/CTK_DCMTK_085525e6.tar.gz
-          )
+        -DDCMTK_CMAKE_DEBUG_POSTFIX:STRING=d
+      )
     endif()
 
     if(CTEST_USE_LAUNCHERS)
       list(APPEND ctk_optional_cache_args
         "-DCMAKE_PROJECT_${proj}_INCLUDE:FILEPATH=${CMAKE_ROOT}/Modules/CTestUseLaunchers.cmake"
       )
-    endif()
-
-    set (ctk_qt_args -DCTK_QT_VERSION:STRING=${DESIRED_QT_VERSION})
-
-    if (DESIRED_QT_VERSION MATCHES "4")
-      list(APPEND ctk_qt_args -DQT_QMAKE_EXECUTABLE:FILEPATH=${QT_QMAKE_EXECUTABLE})
     endif()
 
     FOREACH(type RUNTIME ARCHIVE LIBRARY)
@@ -79,20 +60,19 @@ if(MITK_USE_CTK)
     ExternalProject_Add(${proj}
       LIST_SEPARATOR ${sep}
       URL ${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/CTK_${revision_tag}.tar.gz
-      #GIT_REPOSITORY https://github.com/commontk/CTK.git
-      #GIT_TAG origin/master
-      URL_MD5 9ebeb78c78ff9f458045e0a5ecffc73f
+      URL_MD5 e7997d53c556f45b6eadb7bdf1645280
+      # PATCH_COMMAND ${PATCH_COMMAND} -N -p1 -i ${CMAKE_CURRENT_LIST_DIR}/CTK.patch
       UPDATE_COMMAND ""
       INSTALL_COMMAND ""
       CMAKE_GENERATOR ${gen}
       CMAKE_ARGS
         ${ep_common_args}
         ${ctk_optional_cache_args}
-        ${ctk_qt_args}
         # The CTK PluginFramework cannot cope with
         # a non-empty CMAKE_DEBUG_POSTFIX for the plugin
         # libraries yet.
         -DCMAKE_DEBUG_POSTFIX:STRING=
+        -DCTK_QT_VERSION:STRING=5
         -DGit_EXECUTABLE:FILEPATH=${GIT_EXECUTABLE}
         -DGIT_EXECUTABLE:FILEPATH=${GIT_EXECUTABLE}
         -DCTK_LIB_CommandLineModules/Backend/LocalProcess:BOOL=ON
@@ -103,10 +83,9 @@ if(MITK_USE_CTK)
         -DCTK_PLUGIN_org.commontk.eventadmin:BOOL=ON
         -DCTK_PLUGIN_org.commontk.configadmin:BOOL=ON
         -DCTK_USE_GIT_PROTOCOL:BOOL=OFF
-        -DDCMTK_URL:STRING=${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/CTK_DCMTK_085525e6.tar.gz
-        -DqRestAPI_URL:STRING=${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/qRestAPI_c5e4c2a7.tar.gz
-        # See bug 19073
-        -DPythonQt_URL:STRING=${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/PythonQt_36ab9c7c.tar.gz
+        -DDCMTK_DIR:PATH=${DCMTK_DIR}
+        -DqRestAPI_URL:STRING=${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/qRestAPI_c5e4c2a7_patched.tar.gz
+        -DPythonQt_URL:STRING=${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/PythonQt_e39be131.tar.gz # From https://github.com/kislinsk/PythonQt.git
       CMAKE_CACHE_ARGS
         ${ep_common_cache_args}
       CMAKE_CACHE_DEFAULT_ARGS
@@ -116,8 +95,6 @@ if(MITK_USE_CTK)
 
     ExternalProject_Get_Property(${proj} binary_dir)
     set(CTK_DIR ${binary_dir})
-    #set(CTK_DIR ${ep_prefix})
-    #mitkFunctionInstallExternalCMakeProject(${proj})
 
   else()
 

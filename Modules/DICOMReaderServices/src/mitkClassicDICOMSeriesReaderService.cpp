@@ -21,12 +21,12 @@ See LICENSE.txt or http://www.mitk.org for details.
 namespace mitk {
 
   ClassicDICOMSeriesReaderService::ClassicDICOMSeriesReaderService()
-  : BaseDICOMReaderService("MITK DICOM Reader(2013 classic style)")
+  : BaseDICOMReaderService("MITK DICOM Reader v2 (classic config)")
 {
   this->RegisterService();
 }
 
-  DICOMFileReader::Pointer ClassicDICOMSeriesReaderService::GetReader(const mitk::StringList& relevantFiles) const
+  DICOMFileReader::Pointer ClassicDICOMSeriesReaderService::GetReader(const mitk::StringList&) const
 {
   mitk::ClassicDICOMSeriesReader::Pointer reader = mitk::ClassicDICOMSeriesReader::New();
   return reader.GetPointer();

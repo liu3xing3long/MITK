@@ -21,7 +21,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 // Qmitk
 #include "QmitkMITKIGTTrackingToolboxView.h"
 #include "QmitkTrackingDeviceConfigurationWidget.h"
-#include "QmitkStdMultiWidget.h"
 
 // Qt
 #include <QMessageBox>
@@ -36,7 +35,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <mitkNodePredicateNot.h>
 #include <mitkNodePredicateProperty.h>
 #include <mitkNavigationToolStorageSerializer.h>
-#include <mitkProgressBar.h>
+//#include <mitkProgressBar.h>
 #include <mitkIOUtil.h>
 #include <mitkLog.h>
 #include <usModule.h>
@@ -60,9 +59,8 @@ See LICENSE.txt or http://www.mitk.org for details.
 const std::string QmitkMITKIGTTrackingToolboxView::VIEW_ID = "org.mitk.views.mitkigttrackingtoolbox";
 
 QmitkMITKIGTTrackingToolboxView::QmitkMITKIGTTrackingToolboxView()
-  : QmitkFunctionality()
+  : QmitkAbstractView()
   , m_Controls(nullptr)
-  , m_MultiWidget(nullptr)
   , m_DeviceTypeCollection(nullptr)
 {
   m_TrackingLoggingTimer = new QTimer(this);
@@ -72,26 +70,28 @@ QmitkMITKIGTTrackingToolboxView::QmitkMITKIGTTrackingToolboxView()
   m_connected = false;
   m_logging = false;
   m_loggedFrames = 0;
-
+  m_SimpleModeEnabled = false;
 
   //create filename for autosaving of tool storage
   QString loggingPathWithoutFilename = QString(mitk::LoggingBackend::GetLogFile().c_str());
   if (!loggingPathWithoutFilename.isEmpty()) //if there already is a path for the MITK logging file use this one
-    {
+  {
     //extract path from path+filename (if someone knows a better way to do this feel free to change it)
     int lengthOfFilename = QFileInfo(QString::fromStdString(mitk::LoggingBackend::GetLogFile())).fileName().size();
-    loggingPathWithoutFilename.resize(loggingPathWithoutFilename.size()-lengthOfFilename);
+    loggingPathWithoutFilename.resize(loggingPathWithoutFilename.size() - lengthOfFilename);
     m_AutoSaveFilename = loggingPathWithoutFilename + "TrackingToolboxAutoSave.IGTToolStorage";
-    }
+  }
   else //if not: use a temporary path from IOUtil
-    {
+  {
     m_AutoSaveFilename = QString(mitk::IOUtil::GetTempPath().c_str()) + "TrackingToolboxAutoSave.IGTToolStorage";
-    }
+  }
   MITK_INFO("IGT Tracking Toolbox") << "Filename for auto saving of IGT ToolStorages: " << m_AutoSaveFilename.toStdString();
 
+  //! [Thread 1]
   //initialize worker thread
   m_WorkerThread = new QThread();
   m_Worker = new QmitkMITKIGTTrackingToolboxViewWorker();
+  //! [Thread 1]
 
   ctkPluginContext* pluginContext = mitk::PluginActivator::GetContext();
   if (pluginContext)
@@ -109,109 +109,116 @@ QmitkMITKIGTTrackingToolboxView::QmitkMITKIGTTrackingToolboxView()
     {
       MITK_INFO << "No Tracking Device Collection!";
     }
-
   }
-
 }
 
 QmitkMITKIGTTrackingToolboxView::~QmitkMITKIGTTrackingToolboxView()
 {
-this->StoreUISettings();
-m_TrackingLoggingTimer->stop();
-m_TrackingRenderTimer->stop();
-m_TimeoutTimer->stop();
-delete m_TrackingLoggingTimer;
-delete m_TrackingRenderTimer;
-delete m_TimeoutTimer;
-try
+  this->StoreUISettings();
+  m_TrackingLoggingTimer->stop();
+  m_TrackingRenderTimer->stop();
+  m_TimeoutTimer->stop();
+  delete m_TrackingLoggingTimer;
+  delete m_TrackingRenderTimer;
+  delete m_TimeoutTimer;
+  try
   {
-  // wait for thread to finish
-  m_WorkerThread->terminate();
-  m_WorkerThread->wait();
-  //clean up worker thread
-  if(m_WorkerThread) {delete m_WorkerThread;}
-  if(m_Worker) {delete m_Worker;}
-  //remove the tracking volume
-  this->GetDataStorage()->Remove(m_TrackingVolumeNode);
-  //unregister microservices
-  if(m_toolStorage) {m_toolStorage->UnRegisterMicroservice();}
-  if(m_TrackingDeviceSource) {m_TrackingDeviceSource->UnRegisterMicroservice();}
-  if(m_IGTLMessageProvider.IsNotNull()){m_IGTLMessageProvider->UnRegisterMicroservice();}
+    //! [Thread 2]
+    // wait for thread to finish
+    m_WorkerThread->terminate();
+    m_WorkerThread->wait();
+    //clean up worker thread
+    if (m_WorkerThread) { delete m_WorkerThread; }
+    if (m_Worker) { delete m_Worker; }
+    //! [Thread 2]
+
+    //remove the tracking volume
+    this->GetDataStorage()->Remove(m_TrackingVolumeNode);
+    //unregister microservices
+    if (m_toolStorage) { m_toolStorage->UnRegisterMicroservice(); }
+    if (m_TrackingDeviceSource) { m_TrackingDeviceSource->UnRegisterMicroservice(); }
+    if (m_IGTLMessageProvider.IsNotNull()){ m_IGTLMessageProvider->UnRegisterMicroservice(); }
   }
-  catch(std::exception& e) {MITK_WARN << "Unexpected exception during clean up of tracking toolbox view: " << e.what();}
-  catch(...) {MITK_WARN << "Unexpected unknown error during clean up of tracking toolbox view!";}
-//store tool storage and UI settings for persistence
-this->AutoSaveToolStorage();
-this->StoreUISettings();
+  catch (std::exception& e) { MITK_WARN << "Unexpected exception during clean up of tracking toolbox view: " << e.what(); }
+  catch (...) { MITK_WARN << "Unexpected unknown error during clean up of tracking toolbox view!"; }
+  //store tool storage and UI settings for persistence
+  this->AutoSaveToolStorage();
+  this->StoreUISettings();
 
-m_DeviceTypeCollection = nullptr;
-mitk::PluginActivator::GetContext()->ungetService(m_DeviceTypeServiceReference);
-
+  m_DeviceTypeCollection = nullptr;
+  mitk::PluginActivator::GetContext()->ungetService(m_DeviceTypeServiceReference);
 }
 
-void QmitkMITKIGTTrackingToolboxView::CreateQtPartControl( QWidget *parent )
+void QmitkMITKIGTTrackingToolboxView::CreateQtPartControl(QWidget *parent)
 {
   // build up qt view, unless already done
-  if ( !m_Controls )
+  if (!m_Controls)
   {
     // create GUI widgets from the Qt Designer's .ui file
     m_Controls = new Ui::QmitkMITKIGTTrackingToolboxViewControls;
-    m_Controls->setupUi( parent );
+    m_Controls->setupUi(parent);
 
     //create connections
-    connect( m_Controls->m_LoadTools, SIGNAL(clicked()), this, SLOT(OnLoadTools()) );
-    connect( m_Controls->m_ConnectDisconnectButton, SIGNAL(clicked()), this, SLOT(OnConnectDisconnect()) );
-    connect( m_Controls->m_StartStopTrackingButton, SIGNAL(clicked()), this, SLOT(OnStartStopTracking()) );
-    connect( m_Controls->m_FreezeUnfreezeTrackingButton, SIGNAL(clicked()), this, SLOT(OnFreezeUnfreezeTracking()) );
-    connect( m_TrackingLoggingTimer, SIGNAL(timeout()), this, SLOT(UpdateLoggingTrackingTimer()));
-    connect( m_TrackingRenderTimer, SIGNAL(timeout()), this, SLOT(UpdateRenderTrackingTimer()));
-    connect( m_TimeoutTimer, SIGNAL(timeout()), this, SLOT(OnTimeOut()));
-    connect( m_Controls->m_ChooseFile, SIGNAL(clicked()), this, SLOT(OnChooseFileClicked()));
-    connect( m_Controls->m_StartLogging, SIGNAL(clicked()), this, SLOT(StartLogging()));
-    connect( m_Controls->m_StopLogging, SIGNAL(clicked()), this, SLOT(StopLogging()));
-    connect( m_Controls->m_VolumeSelectionBox, SIGNAL(currentIndexChanged(QString)), this, SLOT(OnTrackingVolumeChanged(QString)));
-    connect( m_Controls->m_ShowTrackingVolume, SIGNAL(clicked()), this, SLOT(OnShowTrackingVolumeChanged()));
-    connect( m_Controls->m_AutoDetectTools, SIGNAL(clicked()), this, SLOT(OnAutoDetectTools()));
-    connect( m_Controls->m_ResetTools, SIGNAL(clicked()), this, SLOT(OnResetTools()));
-    connect( m_Controls->m_AddSingleTool, SIGNAL(clicked()), this, SLOT(OnAddSingleTool()));
-    connect( m_Controls->m_NavigationToolCreationWidget, SIGNAL(NavigationToolFinished()), this, SLOT(OnAddSingleToolFinished()));
-    connect( m_Controls->m_NavigationToolCreationWidget, SIGNAL(Canceled()), this, SLOT(OnAddSingleToolCanceled()));
-    connect( m_Controls->m_csvFormat, SIGNAL(clicked()), this, SLOT(OnToggleFileExtension()));
-    connect( m_Controls->m_xmlFormat, SIGNAL(clicked()), this, SLOT(OnToggleFileExtension()));
-    connect( m_Controls->m_UseDifferentUpdateRates, SIGNAL(clicked()), this, SLOT(OnToggleDifferentUpdateRates()));
-    connect( m_Controls->m_RenderUpdateRate, SIGNAL(valueChanged(int)), this, SLOT(OnChangeRenderUpdateRate()));
-    connect( m_Controls->m_DisableAllTimers, SIGNAL(stateChanged(int)), this, SLOT(EnableDisableTimerButtons(int)));
+    connect(m_Controls->m_LoadTools, SIGNAL(clicked()), this, SLOT(OnLoadTools()));
+    connect(m_Controls->m_ConnectDisconnectButton, SIGNAL(clicked()), this, SLOT(OnConnectDisconnect()));
+    connect(m_Controls->m_StartStopTrackingButton, SIGNAL(clicked()), this, SLOT(OnStartStopTracking()));
+    connect(m_Controls->m_ConnectSimpleMode, SIGNAL(clicked()), this, SLOT(OnConnectDisconnect()));
+    connect(m_Controls->m_StartTrackingSimpleMode, SIGNAL(clicked()), this, SLOT(OnStartStopTracking()));
+    connect(m_Controls->m_FreezeUnfreezeTrackingButton, SIGNAL(clicked()), this, SLOT(OnFreezeUnfreezeTracking()));
+    connect(m_TrackingLoggingTimer, SIGNAL(timeout()), this, SLOT(UpdateLoggingTrackingTimer()));
+    connect(m_TrackingRenderTimer, SIGNAL(timeout()), this, SLOT(UpdateRenderTrackingTimer()));
+    connect(m_TimeoutTimer, SIGNAL(timeout()), this, SLOT(OnTimeOut()));
+    connect(m_Controls->m_ChooseFile, SIGNAL(clicked()), this, SLOT(OnChooseFileClicked()));
+    connect(m_Controls->m_StartLogging, SIGNAL(clicked()), this, SLOT(StartLogging()));
+    connect(m_Controls->m_StopLogging, SIGNAL(clicked()), this, SLOT(StopLogging()));
+    connect(m_Controls->m_VolumeSelectionBox, SIGNAL(currentIndexChanged(QString)), this, SLOT(OnTrackingVolumeChanged(QString)));
+    connect(m_Controls->m_ShowTrackingVolume, SIGNAL(clicked()), this, SLOT(OnShowTrackingVolumeChanged()));
+    connect(m_Controls->m_AutoDetectTools, SIGNAL(clicked()), this, SLOT(OnAutoDetectTools()));
+    connect(m_Controls->m_ResetTools, SIGNAL(clicked()), this, SLOT(OnResetTools()));
+    connect(m_Controls->m_AddSingleTool, SIGNAL(clicked()), this, SLOT(OnAddSingleTool()));
+    connect(m_Controls->m_NavigationToolCreationWidget, SIGNAL(NavigationToolFinished()), this, SLOT(OnAddSingleToolFinished()));
+    connect(m_Controls->m_NavigationToolCreationWidget, SIGNAL(Canceled()), this, SLOT(OnAddSingleToolCanceled()));
+    connect(m_Controls->m_csvFormat, SIGNAL(clicked()), this, SLOT(OnToggleFileExtension()));
+    connect(m_Controls->m_xmlFormat, SIGNAL(clicked()), this, SLOT(OnToggleFileExtension()));
+    connect(m_Controls->m_UseDifferentUpdateRates, SIGNAL(clicked()), this, SLOT(OnToggleDifferentUpdateRates()));
+    connect(m_Controls->m_RenderUpdateRate, SIGNAL(valueChanged(int)), this, SLOT(OnChangeRenderUpdateRate()));
+    connect(m_Controls->m_DisableAllTimers, SIGNAL(stateChanged(int)), this, SLOT(EnableDisableTimerButtons(int)));
+    connect(m_Controls->m_advancedUI, SIGNAL(clicked()), this, SLOT(OnToggleAdvancedSimpleMode()));
+    connect(m_Controls->m_simpleUI, SIGNAL(clicked()), this, SLOT(OnToggleAdvancedSimpleMode()));
 
     //connections for the tracking device configuration widget
-    connect( m_Controls->m_configurationWidget, SIGNAL(TrackingDeviceSelectionChanged()), this, SLOT(OnTrackingDeviceChanged()));
+    connect(m_Controls->m_configurationWidget, SIGNAL(TrackingDeviceSelectionChanged()), this, SLOT(OnTrackingDeviceChanged()));
 
-
+    //! [Thread 3]
     //connect worker thread
-    connect(m_Worker, SIGNAL(AutoDetectToolsFinished(bool,QString)), this, SLOT(OnAutoDetectToolsFinished(bool,QString)) );
-    connect(m_Worker, SIGNAL(ConnectDeviceFinished(bool,QString)), this, SLOT(OnConnectFinished(bool,QString)) );
-    connect(m_Worker, SIGNAL(StartTrackingFinished(bool,QString)), this, SLOT(OnStartTrackingFinished(bool,QString)) );
-    connect(m_Worker, SIGNAL(StopTrackingFinished(bool,QString)), this, SLOT(OnStopTrackingFinished(bool,QString)) );
-    connect(m_Worker, SIGNAL(DisconnectDeviceFinished(bool,QString)), this, SLOT(OnDisconnectFinished(bool,QString)) );
-    connect(m_WorkerThread,SIGNAL(started()), m_Worker, SLOT(ThreadFunc()) );
+    connect(m_Worker, SIGNAL(AutoDetectToolsFinished(bool, QString)), this, SLOT(OnAutoDetectToolsFinished(bool, QString)));
+    connect(m_Worker, SIGNAL(ConnectDeviceFinished(bool, QString)), this, SLOT(OnConnectFinished(bool, QString)));
+    connect(m_Worker, SIGNAL(StartTrackingFinished(bool, QString)), this, SLOT(OnStartTrackingFinished(bool, QString)));
+    connect(m_Worker, SIGNAL(StopTrackingFinished(bool, QString)), this, SLOT(OnStopTrackingFinished(bool, QString)));
+    connect(m_Worker, SIGNAL(DisconnectDeviceFinished(bool, QString)), this, SLOT(OnDisconnectFinished(bool, QString)));
+    connect(m_WorkerThread, SIGNAL(started()), m_Worker, SLOT(ThreadFunc()));
 
     //move the worker to the thread
     m_Worker->moveToThread(m_WorkerThread);
+    //! [Thread 3]
 
     //initialize widgets
     m_Controls->m_TrackingToolsStatusWidget->SetShowPositions(true);
     m_Controls->m_TrackingToolsStatusWidget->SetTextAlignment(Qt::AlignLeft);
+    m_Controls->m_simpleWidget->setVisible(false);
 
     //initialize tracking volume node
     m_TrackingVolumeNode = mitk::DataNode::New();
     m_TrackingVolumeNode->SetName("TrackingVolume");
-    m_TrackingVolumeNode->SetBoolProperty("Backface Culling",true);
+    m_TrackingVolumeNode->SetBoolProperty("Backface Culling", true);
     mitk::Color red;
     red.SetRed(1);
     m_TrackingVolumeNode->SetColor(red);
 
     //initialize buttons
-    m_Controls->m_AutoDetectTools->setVisible(false); //only visible if tracking device is Aurora
+    m_Controls->m_AutoDetectTools->setVisible(false); //only visible if supported by tracking device
     m_Controls->m_StartStopTrackingButton->setEnabled(false);
+    m_Controls->m_StartTrackingSimpleMode->setEnabled(false);
     m_Controls->m_FreezeUnfreezeTrackingButton->setEnabled(false);
 
     //initialize warning labels
@@ -220,19 +227,19 @@ void QmitkMITKIGTTrackingToolboxView::CreateQtPartControl( QWidget *parent )
 
     //Update List of available models for selected tool.
     std::vector<mitk::TrackingDeviceData> Compatibles;
-    if ( (m_Controls == NULL) || //check all these stuff for NULL, latterly this causes crashes from time to time
-      (m_Controls->m_configurationWidget == NULL) ||
+    if ((m_Controls == nullptr) || //check all these stuff for nullptr, latterly this causes crashes from time to time
+      (m_Controls->m_configurationWidget == nullptr) ||
       (m_Controls->m_configurationWidget->GetTrackingDevice().IsNull()))
     {
-      MITK_ERROR << "Couldn't get current tracking device or an object is NULL, something went wrong!";
+      MITK_ERROR << "Couldn't get current tracking device or an object is nullptr, something went wrong!";
       return;
     }
     else
     {
-      Compatibles = m_DeviceTypeCollection->GetDeviceDataForLine( m_Controls->m_configurationWidget->GetTrackingDevice()->GetType());
+      Compatibles = m_DeviceTypeCollection->GetDeviceDataForLine(m_Controls->m_configurationWidget->GetTrackingDevice()->GetType());
     }
     m_Controls->m_VolumeSelectionBox->clear();
-    for(std::size_t i = 0; i < Compatibles.size(); i++)
+    for (std::size_t i = 0; i < Compatibles.size(); i++)
     {
       m_Controls->m_VolumeSelectionBox->addItem(Compatibles[i].Model.c_str());
     }
@@ -258,27 +265,22 @@ void QmitkMITKIGTTrackingToolboxView::CreateQtPartControl( QWidget *parent )
 
     //Update List of available models for selected tool.
     m_Controls->m_VolumeSelectionBox->clear();
-    for(std::size_t i = 0; i < Compatibles.size(); i++)
+    for (std::size_t i = 0; i < Compatibles.size(); i++)
     {
       m_Controls->m_VolumeSelectionBox->addItem(Compatibles[i].Model.c_str());
     }
   }
 }
 
-void QmitkMITKIGTTrackingToolboxView::StdMultiWidgetAvailable (QmitkStdMultiWidget &stdMultiWidget)
+void QmitkMITKIGTTrackingToolboxView::SetFocus()
 {
-  m_MultiWidget = &stdMultiWidget;
-}
-
-void QmitkMITKIGTTrackingToolboxView::StdMultiWidgetNotAvailable()
-{
-  m_MultiWidget = NULL;
+  m_Controls->m_configurationWidget->setFocus();
 }
 
 void QmitkMITKIGTTrackingToolboxView::OnLoadTools()
 {
   //read in filename
-  QString filename = QFileDialog::getOpenFileName(NULL,tr("Open Tool Storage"), "/", tr("Tool Storage Files (*.IGTToolStorage)"));
+  QString filename = QFileDialog::getOpenFileName(nullptr, tr("Open Tool Storage"), "/", tr("Tool Storage Files (*.IGTToolStorage)"));
   if (filename.isNull()) return;
 
   //read tool storage from disk
@@ -287,16 +289,16 @@ void QmitkMITKIGTTrackingToolboxView::OnLoadTools()
   // try-catch block for exceptions
   try
   {
-    this->ReplaceCurrentToolStorage(myDeserializer->Deserialize(filename.toStdString()),filename.toStdString());
+    this->ReplaceCurrentToolStorage(myDeserializer->Deserialize(filename.toStdString()), filename.toStdString());
   }
-  catch(mitk::IGTException)
+  catch (mitk::IGTException)
   {
-   std::string errormessage = "Error during loading the tool storage file. Please only load tool storage files created with the NavigationToolManager view.";
-   QMessageBox::warning(NULL, "Tool Storage Loading Error", errormessage.c_str());
-   return;
+    std::string errormessage = "Error during loading the tool storage file. Please only load tool storage files created with the NavigationToolManager view.";
+    QMessageBox::warning(nullptr, "Tool Storage Loading Error", errormessage.c_str());
+    return;
   }
 
-  if(m_toolStorage->isEmpty())
+  if (m_toolStorage->isEmpty())
   {
     errorMessage = myDeserializer->GetErrorMessage();
     MessageBox(errorMessage);
@@ -316,7 +318,7 @@ void QmitkMITKIGTTrackingToolboxView::OnLoadTools()
 
 void QmitkMITKIGTTrackingToolboxView::OnResetTools()
 {
-  this->ReplaceCurrentToolStorage(mitk::NavigationToolStorage::New(GetDataStorage()),"TrackingToolbox Default Storage");
+  this->ReplaceCurrentToolStorage(mitk::NavigationToolStorage::New(GetDataStorage()), "TrackingToolbox Default Storage");
   m_Controls->m_TrackingToolsStatusWidget->RemoveStatusLabels();
   QString toolLabel = QString("<none>");
   m_Controls->m_toolLabel->setText(toolLabel);
@@ -325,24 +327,24 @@ void QmitkMITKIGTTrackingToolboxView::OnResetTools()
 
 void QmitkMITKIGTTrackingToolboxView::OnStartStopTracking()
 {
-  if(!m_connected)
-    {
+  if (!m_connected)
+  {
     MITK_WARN << "Can't start tracking if no device is connected. Aborting";
     return;
-    }
-  if(m_tracking) {OnStopTracking();}
-  else {OnStartTracking();}
+  }
+  if (m_tracking) { OnStopTracking(); }
+  else { OnStartTracking(); }
 }
 
 void QmitkMITKIGTTrackingToolboxView::OnFreezeUnfreezeTracking()
 {
-  if( m_Controls->m_FreezeUnfreezeTrackingButton->text() == "Freeze Tracking" )
+  if (m_Controls->m_FreezeUnfreezeTrackingButton->text() == "Freeze Tracking")
   {
     m_TrackingDeviceSource->Freeze();
     m_Controls->m_FreezeUnfreezeTrackingButton->setText("Unfreeze Tracking");
     m_Controls->m_TrackingFrozenLabel->setVisible(true);
   }
-  else if( m_Controls->m_FreezeUnfreezeTrackingButton->text() == "Unfreeze Tracking" )
+  else if (m_Controls->m_FreezeUnfreezeTrackingButton->text() == "Unfreeze Tracking")
   {
     m_TrackingDeviceSource->UnFreeze();
     m_Controls->m_FreezeUnfreezeTrackingButton->setText("Freeze Tracking");
@@ -352,8 +354,8 @@ void QmitkMITKIGTTrackingToolboxView::OnFreezeUnfreezeTracking()
 
 void QmitkMITKIGTTrackingToolboxView::OnConnectDisconnect()
 {
-  if(m_connected) {OnDisconnect();}
-  else {OnConnect();}
+  if (m_connected) { OnDisconnect(); }
+  else { OnConnect(); }
 }
 
 void QmitkMITKIGTTrackingToolboxView::OnConnect()
@@ -373,12 +375,13 @@ void QmitkMITKIGTTrackingToolboxView::OnConnect()
 
   //parse tracking device data
   mitk::TrackingDeviceData data = mitk::UnspecifiedTrackingTypeInformation::GetDeviceDataUnspecified();
-  QString qstr =  m_Controls->m_VolumeSelectionBox->currentText();
-  if ( (! qstr.isNull()) || (! qstr.isEmpty()) ) {
+  QString qstr = m_Controls->m_VolumeSelectionBox->currentText();
+  if ((!qstr.isNull()) || (!qstr.isEmpty())) {
     std::string str = qstr.toStdString();
     data = m_DeviceTypeCollection->GetDeviceDataByName(str); //Data will be set later, after device generation
   }
 
+  //! [Thread 4]
   //initialize worker thread
   m_Worker->SetWorkerMethod(QmitkMITKIGTTrackingToolboxViewWorker::eConnectDevice);
   m_Worker->SetTrackingDevice(this->m_Controls->m_configurationWidget->GetTrackingDevice());
@@ -387,6 +390,7 @@ void QmitkMITKIGTTrackingToolboxView::OnConnect()
   m_Worker->SetTrackingDeviceData(data);
   //start worker thread
   m_WorkerThread->start();
+  //! [Thread 4]
 
   //disable buttons
   this->m_Controls->m_MainWidget->setEnabled(false);
@@ -414,10 +418,12 @@ void QmitkMITKIGTTrackingToolboxView::OnConnectFinished(bool success, QString er
     return;
   }
 
+  //! [Thread 6]
   //get data from worker thread
   m_TrackingDeviceSource = m_Worker->GetTrackingDeviceSource();
   m_TrackingDeviceData = m_Worker->GetTrackingDeviceData();
   m_ToolVisualizationFilter = m_Worker->GetToolVisualizationFilter();
+  //! [Thread 6]
 
   //enable/disable Buttons
   DisableOptionsButtons();
@@ -425,9 +431,11 @@ void QmitkMITKIGTTrackingToolboxView::OnConnectFinished(bool success, QString er
 
   m_Controls->m_TrackingControlLabel->setText("Status: connected");
   m_Controls->m_ConnectDisconnectButton->setText("Disconnect");
+  m_Controls->m_ConnectSimpleMode->setText("Disconnect");
   m_Controls->m_StartStopTrackingButton->setEnabled(true);
+  m_Controls->m_StartTrackingSimpleMode->setEnabled(true);
   m_connected = true;
-  }
+}
 
 void QmitkMITKIGTTrackingToolboxView::OnDisconnect()
 {
@@ -451,17 +459,23 @@ void QmitkMITKIGTTrackingToolboxView::OnDisconnectFinished(bool success, QString
 
   //enable/disable Buttons
   m_Controls->m_StartStopTrackingButton->setEnabled(false);
+  m_Controls->m_StartTrackingSimpleMode->setEnabled(false);
   EnableOptionsButtons();
   EnableTrackingConfigurationButtons();
   m_Controls->m_TrackingControlLabel->setText("Status: disconnected");
   m_Controls->m_ConnectDisconnectButton->setText("Connect");
+  m_Controls->m_ConnectSimpleMode->setText("Connect");
   m_Controls->m_FreezeUnfreezeTrackingButton->setText("Freeze Tracking");
   m_Controls->m_TrackingFrozenLabel->setVisible(false);
   m_connected = false;
-  }
+}
 
 void QmitkMITKIGTTrackingToolboxView::OnStartTracking()
 {
+  //show tracking volume
+  this->OnTrackingVolumeChanged(m_Controls->m_VolumeSelectionBox->currentText());
+  //Reset the view to a defined start. Do it here and not in OnStartTrackingFinished, to give other tracking devices the chance to reset the view to a different direction.
+  this->GlobalReinit();
   m_Worker->SetWorkerMethod(QmitkMITKIGTTrackingToolboxViewWorker::eStartTracking);
   m_WorkerThread->start();
   this->m_Controls->m_MainWidget->setEnabled(false);
@@ -469,52 +483,63 @@ void QmitkMITKIGTTrackingToolboxView::OnStartTracking()
 
 void QmitkMITKIGTTrackingToolboxView::OnStartTrackingFinished(bool success, QString errorMessage)
 {
+  //! [Thread 5]
   m_WorkerThread->quit();
   m_WorkerThread->wait();
+  //! [Thread 5]
   this->m_Controls->m_MainWidget->setEnabled(true);
 
-  if(!success)
+  if (!success)
   {
     MessageBox(errorMessage.toStdString());
     MITK_WARN << errorMessage.toStdString();
     return;
   }
 
-  if(!(m_Controls->m_DisableAllTimers->isChecked()))
+  if (!(m_Controls->m_DisableAllTimers->isChecked()))
   {
-     if(m_Controls->m_UseDifferentUpdateRates->isChecked())
-     {
-       if(m_Controls->m_RenderUpdateRate->value() != 0)
-         m_TrackingRenderTimer->start(1000/(m_Controls->m_RenderUpdateRate->value()));
-       m_TrackingLoggingTimer->start(1000/(m_Controls->m_LogUpdateRate->value()));
-     }
-     else
-     {
-       m_TrackingRenderTimer->start(1000/(m_Controls->m_UpdateRate->value()));
-       m_TrackingLoggingTimer->start(1000/(m_Controls->m_UpdateRate->value()));
-     }
+    if (m_Controls->m_UseDifferentUpdateRates->isChecked())
+    {
+      if (m_Controls->m_RenderUpdateRate->value() != 0)
+        m_TrackingRenderTimer->start(1000 / (m_Controls->m_RenderUpdateRate->value()));
+      m_TrackingLoggingTimer->start(1000 / (m_Controls->m_LogUpdateRate->value()));
+    }
+    else
+    {
+      m_TrackingRenderTimer->start(1000 / (m_Controls->m_UpdateRate->value()));
+      m_TrackingLoggingTimer->start(1000 / (m_Controls->m_UpdateRate->value()));
+    }
   }
 
   m_Controls->m_TrackingControlLabel->setText("Status: tracking");
 
   //connect the tool visualization widget
-  for(std::size_t i=0; i<m_TrackingDeviceSource->GetNumberOfOutputs(); i++)
+  for (std::size_t i = 0; i < m_TrackingDeviceSource->GetNumberOfOutputs(); i++)
   {
     m_Controls->m_TrackingToolsStatusWidget->AddNavigationData(m_TrackingDeviceSource->GetOutput(i));
   }
   m_Controls->m_TrackingToolsStatusWidget->ShowStatusLabels();
-  if (m_Controls->m_ShowToolQuaternions->isChecked()) {m_Controls->m_TrackingToolsStatusWidget->SetShowQuaternions(true);}
-  else {m_Controls->m_TrackingToolsStatusWidget->SetShowQuaternions(false);}
+  if (m_Controls->m_ShowToolQuaternions->isChecked()) { m_Controls->m_TrackingToolsStatusWidget->SetShowQuaternions(true); }
+  else { m_Controls->m_TrackingToolsStatusWidget->SetShowQuaternions(false); }
 
   //if activated enable open IGT link microservice
   if (m_Controls->m_EnableOpenIGTLinkMicroService->isChecked())
-    {
+  {
     //create convertion filter
-    m_IGTLConversionFilter =  mitk::NavigationDataToIGTLMessageFilter::New();
+    m_IGTLConversionFilter = mitk::NavigationDataToIGTLMessageFilter::New();
     m_IGTLConversionFilter->SetName("IGT Tracking Toolbox");
+    QString dataModeSelection = this->m_Controls->m_OpenIGTLinkDataFormat->currentText();
+    if (dataModeSelection == "TDATA")
+      {m_IGTLConversionFilter->SetOperationMode(mitk::NavigationDataToIGTLMessageFilter::ModeSendTDataMsg);}
+    else if (dataModeSelection == "TRANSFORM")
+      {m_IGTLConversionFilter->SetOperationMode(mitk::NavigationDataToIGTLMessageFilter::ModeSendTransMsg);}
+    else if (dataModeSelection == "QTDATA")
+      {m_IGTLConversionFilter->SetOperationMode(mitk::NavigationDataToIGTLMessageFilter::ModeSendQTDataMsg);}
+    else if (dataModeSelection == "POSITION")
+      {m_IGTLConversionFilter->SetOperationMode(mitk::NavigationDataToIGTLMessageFilter::ModeSendQTransMsg);}
     m_IGTLConversionFilter->ConnectTo(m_ToolVisualizationFilter);
-    m_IGTLConversionFilter->SetOperationMode(mitk::NavigationDataToIGTLMessageFilter::ModeSendTDataMsg);
     m_IGTLConversionFilter->RegisterAsMicroservice();
+
 
     //create server and message provider
     m_IGTLServer = mitk::IGTLServer::New(false);
@@ -522,17 +547,14 @@ void QmitkMITKIGTTrackingToolboxView::OnStartTrackingFinished(bool success, QStr
     m_IGTLMessageProvider = mitk::IGTLMessageProvider::New();
     m_IGTLMessageProvider->SetIGTLDevice(m_IGTLServer);
     m_IGTLMessageProvider->RegisterAsMicroservice();
-    }
-
-  //show tracking volume
-  this->OnTrackingVolumeChanged(m_Controls->m_VolumeSelectionBox->currentText());
+  }
 
   m_tracking = true;
   m_Controls->m_ConnectDisconnectButton->setEnabled(false);
   m_Controls->m_StartStopTrackingButton->setText("Stop Tracking");
+  m_Controls->m_StartTrackingSimpleMode->setText("Stop\nTracking");
   m_Controls->m_FreezeUnfreezeTrackingButton->setEnabled(true);
 
-  this->GlobalReinit();
 }
 
 void QmitkMITKIGTTrackingToolboxView::OnStopTracking()
@@ -551,7 +573,7 @@ void QmitkMITKIGTTrackingToolboxView::OnStopTrackingFinished(bool success, QStri
   m_WorkerThread->quit();
   m_WorkerThread->wait();
   m_Controls->m_MainWidget->setEnabled(true);
-  if(!success)
+  if (!success)
   {
     MessageBox(errorMessage.toStdString());
     MITK_WARN << errorMessage.toStdString();
@@ -564,17 +586,16 @@ void QmitkMITKIGTTrackingToolboxView::OnStopTrackingFinished(bool success, QStri
   m_Controls->m_TrackingToolsStatusWidget->PreShowTools(m_toolStorage);
   m_tracking = false;
   m_Controls->m_StartStopTrackingButton->setText("Start Tracking");
+  m_Controls->m_StartTrackingSimpleMode->setText("Start\nTracking");
   m_Controls->m_ConnectDisconnectButton->setEnabled(true);
   m_Controls->m_FreezeUnfreezeTrackingButton->setEnabled(false);
 
   //unregister open IGT link micro service
   if (m_Controls->m_EnableOpenIGTLinkMicroService->isChecked())
-    {
+  {
     m_IGTLConversionFilter->UnRegisterMicroservice();
     m_IGTLMessageProvider->UnRegisterMicroservice();
-    }
-
-  this->GlobalReinit();
+  }
 }
 
 void QmitkMITKIGTTrackingToolboxView::OnTrackingDeviceChanged()
@@ -598,21 +619,20 @@ void QmitkMITKIGTTrackingToolboxView::OnTrackingDeviceChanged()
   }
 
   // Code to enable/disable device specific buttons
+  if (m_Controls->m_configurationWidget->GetTrackingDevice()->AutoDetectToolsAvailable())
+    { m_Controls->m_AutoDetectTools->setVisible(true); }
+  else
+    { m_Controls->m_AutoDetectTools->setVisible(false); }
+
   if (Type == mitk::NDIAuroraTypeInformation::GetTrackingDeviceName()) //Aurora
-  {
-    m_Controls->m_AutoDetectTools->setVisible(true);
-    m_Controls->m_AddSingleTool->setEnabled(false);
-  }
-  else //Polaris or Microntracker
-  {
-    m_Controls->m_AutoDetectTools->setVisible(false);
-    m_Controls->m_AddSingleTool->setEnabled(true);
-  }
+    { m_Controls->m_AddSingleTool->setEnabled(false);}
+  else //other trackers
+    { m_Controls->m_AddSingleTool->setEnabled(true); }
 
   // Code to select appropriate tracking volume for current type
   std::vector<mitk::TrackingDeviceData> Compatibles = m_DeviceTypeCollection->GetDeviceDataForLine(Type);
   m_Controls->m_VolumeSelectionBox->clear();
-  for(std::size_t i = 0; i < Compatibles.size(); i++)
+  for (std::size_t i = 0; i < Compatibles.size(); i++)
   {
     m_Controls->m_VolumeSelectionBox->addItem(Compatibles[i].Model.c_str());
   }
@@ -658,7 +678,7 @@ void QmitkMITKIGTTrackingToolboxView::OnShowTrackingVolumeChanged()
 
 void QmitkMITKIGTTrackingToolboxView::OnAutoDetectTools()
 {
-  if (m_Controls->m_configurationWidget->GetTrackingDevice()->GetType() == mitk::NDIAuroraTypeInformation::GetTrackingDeviceName())
+  if (m_Controls->m_configurationWidget->GetTrackingDevice()->AutoDetectToolsAvailable())
   {
     DisableTrackingConfigurationButtons();
     m_Worker->SetWorkerMethod(QmitkMITKIGTTrackingToolboxViewWorker::eAutoDetectTools);
@@ -666,7 +686,6 @@ void QmitkMITKIGTTrackingToolboxView::OnAutoDetectTools()
     m_Worker->SetDataStorage(this->GetDataStorage());
     m_WorkerThread->start();
     m_TimeoutTimer->start(5000);
-    MITK_INFO << "Timeout Timer started";
     //disable controls until worker thread is finished
     this->m_Controls->m_MainWidget->setEnabled(false);
   }
@@ -674,15 +693,15 @@ void QmitkMITKIGTTrackingToolboxView::OnAutoDetectTools()
 
 void QmitkMITKIGTTrackingToolboxView::OnAutoDetectToolsFinished(bool success, QString errorMessage)
 {
-    m_TimeoutTimer->stop();
-    m_WorkerThread->quit();
-    m_WorkerThread->wait();
+  m_TimeoutTimer->stop();
+  m_WorkerThread->quit();
+  m_WorkerThread->wait();
 
   //enable controls again
   this->m_Controls->m_MainWidget->setEnabled(true);
-    EnableTrackingConfigurationButtons();
+  EnableTrackingConfigurationButtons();
 
-  if(!success)
+  if (!success)
   {
     MITK_WARN << errorMessage.toStdString();
     MessageBox(errorMessage.toStdString());
@@ -692,75 +711,31 @@ void QmitkMITKIGTTrackingToolboxView::OnAutoDetectToolsFinished(bool success, QS
 
   mitk::NavigationToolStorage::Pointer autoDetectedStorage = m_Worker->GetNavigationToolStorage();
 
-   //save detected tools
-   this->ReplaceCurrentToolStorage(autoDetectedStorage,"Autodetected NDI Aurora Storage");
-   //auto save the new storage to hard disc (for persistence)
-   AutoSaveToolStorage();
-   //update label
-   QString toolLabel = QString("Loaded Tools: ") + QString::number(m_toolStorage->GetToolCount()) + " Tools (Auto Detected)";
-   m_Controls->m_toolLabel->setText(toolLabel);
-   //update tool preview
-   m_Controls->m_TrackingToolsStatusWidget->RemoveStatusLabels();
+  //save detected tools
+  this->ReplaceCurrentToolStorage(autoDetectedStorage, "Autodetected NDI Aurora Storage");
+  //auto save the new storage to hard disc (for persistence)
+  AutoSaveToolStorage();
+  //update label
+  QString toolLabel = QString("Loaded Tools: ") + QString::number(m_toolStorage->GetToolCount()) + " Tools (Auto Detected)";
+  m_Controls->m_toolLabel->setText(toolLabel);
+  //update tool preview
+  m_Controls->m_TrackingToolsStatusWidget->RemoveStatusLabels();
   m_Controls->m_TrackingToolsStatusWidget->PreShowTools(m_toolStorage);
 
   EnableTrackingConfigurationButtons();
 
-  if (m_toolStorage->GetToolCount()>0)
+  //print a logging message about the detected tools
+  switch (m_toolStorage->GetToolCount())
   {
-    //ask the user if he wants to save the detected tools
-    QMessageBox msgBox;
-    switch(m_toolStorage->GetToolCount())
-    {
-    case 1:
-      msgBox.setText("Found one tool!");
-      break;
-    default:
-      msgBox.setText("Found " + QString::number(m_toolStorage->GetToolCount()) + " tools!");
-    }
-    msgBox.setInformativeText("Do you want to save this tools as tool storage, so you can load them again?");
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    msgBox.setDefaultButton(QMessageBox::No);
-    int ret = msgBox.exec();
-
-    if (ret == 16384) //yes
-    {
-      //ask the user for a filename
-      QString fileName = QFileDialog::getSaveFileName(NULL, tr("Save File"),"/",tr("*.IGTToolStorage"));
-      //check for empty filename
-      if(fileName == "") {return;}
-      mitk::NavigationToolStorageSerializer::Pointer mySerializer = mitk::NavigationToolStorageSerializer::New();
-
-      //when Serialize method is used exceptions are thrown, need to be adapted
-      //try-catch block for exception handling in Serializer
-      try
-      {
-        mySerializer->Serialize(fileName.toStdString(),m_toolStorage);
-      }
-      catch(mitk::IGTException)
-      {
-        std::string errormessage = "Error during serialization. Please check the Zip file.";
-        QMessageBox::warning(NULL, "IGTPlayer: Error", errormessage.c_str());
-      }
-
-      return;
-    }
-    else if (ret == 65536) //no
-    {
-      return;
-    }
+  case 0:
+    MITK_INFO("IGT Tracking Toolbox") << "Found no tools. Empty ToolStorage was autosaved to " << m_ToolStorageFilename.toStdString();
+    break;
+  case 1:
+    MITK_INFO("IGT Tracking Toolbox") << "Found one tool. ToolStorage was autosaved to " << m_ToolStorageFilename.toStdString();
+    break;
+  default:
+    MITK_INFO("IGT Tracking Toolbox") << "Found " << m_toolStorage->GetToolCount() << " tools. ToolStorage was autosaved to " << m_ToolStorageFilename.toStdString();
   }
-    //print a logging message about the detected tools
-    switch(m_toolStorage->GetToolCount())
-        {
-        case 0:
-          MITK_INFO("IGT Tracking Toolbox") <<  "Found no tools. Empty ToolStorage was autosaved to " << m_ToolStorageFilename.toStdString();
-          break;
-        case 1:
-          MITK_INFO("IGT Tracking Toolbox") <<  "Found one tool. ToolStorage was autosaved to " << m_ToolStorageFilename.toStdString();
-          break;
-        default:
-          MITK_INFO("IGT Tracking Toolbox") << "Found " << m_toolStorage->GetToolCount() << " tools. ToolStorage was autosaved to " << m_ToolStorageFilename.toStdString();
-        }
 }
 
 void QmitkMITKIGTTrackingToolboxView::MessageBox(std::string s)
@@ -778,41 +753,22 @@ void QmitkMITKIGTTrackingToolboxView::UpdateRenderTrackingTimer()
   MITK_DEBUG << "Number of inputs ToolVisualizationFilter: " << m_ToolVisualizationFilter->GetNumberOfIndexedInputs();
 
   //update tool colors to show tool status
-  for(unsigned int i=0; i<m_ToolVisualizationFilter->GetNumberOfIndexedOutputs(); i++)
+  for (unsigned int i = 0; i < m_ToolVisualizationFilter->GetNumberOfIndexedOutputs(); i++)
   {
     mitk::NavigationData::Pointer currentTool = m_ToolVisualizationFilter->GetOutput(i);
-    if(currentTool->IsDataValid())
-      {this->m_toolStorage->GetTool(i)->GetDataNode()->SetColor(mitk::IGTColor_VALID);}
+    if (currentTool->IsDataValid())
+    {
+      this->m_toolStorage->GetTool(i)->GetDataNode()->SetColor(mitk::IGTColor_VALID);
+    }
     else
-      {this->m_toolStorage->GetTool(i)->GetDataNode()->SetColor(mitk::IGTColor_WARNING);}
+    {
+      this->m_toolStorage->GetTool(i)->GetDataNode()->SetColor(mitk::IGTColor_WARNING);
+    }
   }
 
   //refresh view and status widget
   mitk::RenderingManager::GetInstance()->RequestUpdateAll();
   m_Controls->m_TrackingToolsStatusWidget->Refresh();
-
-  //code to better isolate bug 17713, could be removed when bug 17713 is fixed
-  static int i = 0;
-  static mitk::Point3D lastPositionTool1 = m_ToolVisualizationFilter->GetOutput(0)->GetPosition();
-  static itk::TimeStamp lastTimeStamp = m_ToolVisualizationFilter->GetOutput(0)->GetTimeStamp();
-  i++;
-  //every 20 frames: check if tracking is frozen
-  if(i>20)
-    {
-    i = 0;
-    if (m_ToolVisualizationFilter->GetOutput(0)->IsDataValid())
-      {
-      if (mitk::Equal(lastPositionTool1,m_ToolVisualizationFilter->GetOutput(0)->GetPosition(),0.000000001,false))
-        {
-        MITK_WARN << "Seems as tracking (of at least tool 1) is frozen which means that bug 17713 occurred. Restart tracking might help.";
-        //display further information to find the bug
-        MITK_WARN << "Timestamp of current navigation data: " << m_ToolVisualizationFilter->GetOutput(0)->GetTimeStamp();
-        MITK_WARN << "Timestamp of last navigation data (which holds the same values): " << lastTimeStamp;
-        }
-      lastPositionTool1 = m_ToolVisualizationFilter->GetOutput(0)->GetPosition();
-      lastTimeStamp = m_ToolVisualizationFilter->GetOutput(0)->GetTimeStamp();
-      }
-    }
 }
 
 void QmitkMITKIGTTrackingToolboxView::UpdateLoggingTrackingTimer()
@@ -822,13 +778,12 @@ void QmitkMITKIGTTrackingToolboxView::UpdateLoggingTrackingTimer()
   {
     this->m_loggingFilter->Update();
     m_loggedFrames = this->m_loggingFilter->GetNumberOfRecordedSteps();
-    this->m_Controls->m_LoggedFramesLabel->setText("Logged Frames: "+QString::number(m_loggedFrames));
+    this->m_Controls->m_LoggedFramesLabel->setText("Logged Frames: " + QString::number(m_loggedFrames));
     //check if logging stopped automatically
-    if((m_loggedFrames>1)&&(!m_loggingFilter->GetRecording())){StopLogging();}
+    if ((m_loggedFrames > 1) && (!m_loggingFilter->GetRecording())){ StopLogging(); }
   }
   //refresh status widget
   m_Controls->m_TrackingToolsStatusWidget->Refresh();
-
 }
 
 void QmitkMITKIGTTrackingToolboxView::OnChooseFileClicked()
@@ -837,12 +792,12 @@ void QmitkMITKIGTTrackingToolboxView::OnChooseFileClicked()
 
   // if no path was selected (QDir would select current working dir then) or the
   // selected path does not exist -> use home directory
-  if ( currentPath == QDir() || ! currentPath.exists() )
+  if (currentPath == QDir() || !currentPath.exists())
   {
     currentPath = QDir(QDir::homePath());
   }
 
-  QString filename = QFileDialog::getSaveFileName(NULL,tr("Choose Logging File"), currentPath.absolutePath(), "*.*");
+  QString filename = QFileDialog::getSaveFileName(nullptr, tr("Choose Logging File"), currentPath.absolutePath(), "*.*");
   if (filename == "") return;
   this->m_Controls->m_LoggingFileName->setText(filename);
   this->OnToggleFileExtension();
@@ -853,20 +808,20 @@ void QmitkMITKIGTTrackingToolboxView::OnToggleFileExtension()
   QString currentInputText = this->m_Controls->m_LoggingFileName->text();
   QString currentFile = QFileInfo(currentInputText).baseName();
   QDir currentPath = QFileInfo(currentInputText).dir();
-  if(currentFile.isEmpty())
+  if (currentFile.isEmpty())
   {
     currentFile = "logfile";
   }
   // Setting currentPath to default home path when currentPath is empty or it does not exist
-  if(currentPath == QDir() || !currentPath.exists())
+  if (currentPath == QDir() || !currentPath.exists())
   {
     currentPath = QDir::homePath();
   }
   // check if csv radio button is clicked
-  if(this->m_Controls->m_csvFormat->isChecked())
+  if (this->m_Controls->m_csvFormat->isChecked())
   {
     // you needn't add a seperator to the input text when currentpath is the rootpath
-    if(currentPath.isRoot())
+    if (currentPath.isRoot())
     {
       this->m_Controls->m_LoggingFileName->setText(QDir::toNativeSeparators(currentPath.absolutePath()) + currentFile + ".csv");
     }
@@ -877,10 +832,10 @@ void QmitkMITKIGTTrackingToolboxView::OnToggleFileExtension()
     }
   }
   // check if xml radio button is clicked
-  else if(this->m_Controls->m_xmlFormat->isChecked())
+  else if (this->m_Controls->m_xmlFormat->isChecked())
   {
     // you needn't add a seperator to the input text when currentpath is the rootpath
-    if(currentPath.isRoot())
+    if (currentPath.isRoot())
     {
       this->m_Controls->m_LoggingFileName->setText(QDir::toNativeSeparators(currentPath.absolutePath()) + currentFile + ".xml");
     }
@@ -891,11 +846,28 @@ void QmitkMITKIGTTrackingToolboxView::OnToggleFileExtension()
   }
 }
 
+void QmitkMITKIGTTrackingToolboxView::OnToggleAdvancedSimpleMode()
+{
+  if (m_SimpleModeEnabled)
+  {
+    m_Controls->m_simpleWidget->setVisible(false);
+    m_Controls->m_MainWidget->setVisible(true);
+    m_Controls->m_simpleUI->setChecked(false);
+    m_SimpleModeEnabled = false;
+  }
+  else
+  {
+    m_Controls->m_simpleWidget->setVisible(true);
+    m_Controls->m_MainWidget->setVisible(false);
+    m_SimpleModeEnabled = true;
+  }
+}
+
 void QmitkMITKIGTTrackingToolboxView::OnToggleDifferentUpdateRates()
 {
-  if(m_Controls->m_UseDifferentUpdateRates->isChecked())
+  if (m_Controls->m_UseDifferentUpdateRates->isChecked())
   {
-    if(m_Controls->m_RenderUpdateRate->value() == 0)
+    if (m_Controls->m_RenderUpdateRate->value() == 0)
       m_Controls->m_renderWarningLabel->setVisible(true);
     else
       m_Controls->m_renderWarningLabel->setVisible(false);
@@ -927,7 +899,7 @@ void QmitkMITKIGTTrackingToolboxView::OnToggleDifferentUpdateRates()
 
 void QmitkMITKIGTTrackingToolboxView::OnChangeRenderUpdateRate()
 {
-  if(m_Controls->m_RenderUpdateRate->value() == 0)
+  if (m_Controls->m_RenderUpdateRate->value() == 0)
     m_Controls->m_renderWarningLabel->setVisible(true);
   else
     m_Controls->m_renderWarningLabel->setVisible(false);
@@ -945,20 +917,21 @@ void QmitkMITKIGTTrackingToolboxView::StartLogging()
   {
     //initialize logging filter
     m_loggingFilter = mitk::NavigationDataRecorder::New();
+    m_loggingFilter->SetRecordOnlyValidData(m_Controls->m_SkipInvalidData->isChecked());
 
     m_loggingFilter->ConnectTo(m_ToolVisualizationFilter);
 
-    if (m_Controls->m_LoggingLimit->isChecked()){m_loggingFilter->SetRecordCountLimit(m_Controls->m_LoggedFramesLimit->value());}
+    if (m_Controls->m_LoggingLimit->isChecked()){ m_loggingFilter->SetRecordCountLimit(m_Controls->m_LoggedFramesLimit->value()); }
 
     //start filter with try-catch block for exceptions
     try
     {
       m_loggingFilter->StartRecording();
     }
-    catch(mitk::IGTException)
+    catch (mitk::IGTException)
     {
       std::string errormessage = "Error during start recording. Recorder already started recording?";
-      QMessageBox::warning(NULL, "IGTPlayer: Error", errormessage.c_str());
+      QMessageBox::warning(nullptr, "IGTPlayer: Error", errormessage.c_str());
       m_loggingFilter->StopRecording();
       return;
     }
@@ -985,14 +958,8 @@ void QmitkMITKIGTTrackingToolboxView::StopLogging()
     EnableLoggingButtons();
 
     //write the results to a file
-    if(m_Controls->m_csvFormat->isChecked())
-      {
-        mitk::IOUtil::SaveBaseData(m_loggingFilter->GetNavigationDataSet(), this->m_Controls->m_LoggingFileName->text().toStdString());
-      }
-    else if (m_Controls->m_xmlFormat->isChecked())
-      {
-        mitk::IOUtil::SaveBaseData(m_loggingFilter->GetNavigationDataSet(), this->m_Controls->m_LoggingFileName->text().toStdString());
-      }
+    if (m_Controls->m_csvFormat->isChecked() || m_Controls->m_xmlFormat->isChecked())
+      mitk::IOUtil::Save(m_loggingFilter->GetNavigationDataSet(), this->m_Controls->m_LoggingFileName->text().toStdString());
   }
 }
 
@@ -1003,12 +970,13 @@ void QmitkMITKIGTTrackingToolboxView::OnAddSingleTool()
   if (m_toolStorage.IsNotNull()) {
     Identifier += QString::number(m_toolStorage->GetToolCount());
     Name += QString::number(m_toolStorage->GetToolCount());
-  } else {
+  }
+  else {
     Identifier += "0";
     Name += "0";
   }
-  m_Controls->m_NavigationToolCreationWidget->Initialize(GetDataStorage(),Identifier.toStdString(),Name.toStdString());
-  m_Controls->m_NavigationToolCreationWidget->SetTrackingDeviceType(m_Controls->m_configurationWidget->GetTrackingDevice()->GetType(),false);
+  m_Controls->m_NavigationToolCreationWidget->Initialize(GetDataStorage(), Identifier.toStdString(), Name.toStdString());
+  m_Controls->m_NavigationToolCreationWidget->SetTrackingDeviceType(m_Controls->m_configurationWidget->GetTrackingDevice()->GetType(), false);
   m_Controls->m_TrackingToolsWidget->setCurrentIndex(1);
 
   //disable tracking volume during tool editing
@@ -1070,6 +1038,7 @@ void QmitkMITKIGTTrackingToolboxView::DisableLoggingButtons()
   m_Controls->m_LoggedFramesLimit->setEnabled(false);
   m_Controls->m_csvFormat->setEnabled(false);
   m_Controls->m_xmlFormat->setEnabled(false);
+  m_Controls->m_SkipInvalidData->setEnabled(false);
   m_Controls->m_StopLogging->setEnabled(true);
 }
 
@@ -1082,6 +1051,7 @@ void QmitkMITKIGTTrackingToolboxView::EnableLoggingButtons()
   m_Controls->m_LoggedFramesLimit->setEnabled(true);
   m_Controls->m_csvFormat->setEnabled(true);
   m_Controls->m_xmlFormat->setEnabled(true);
+  m_Controls->m_SkipInvalidData->setEnabled(true);
   m_Controls->m_StopLogging->setEnabled(false);
 }
 
@@ -1097,6 +1067,8 @@ void QmitkMITKIGTTrackingToolboxView::DisableOptionsButtons()
   m_Controls->m_OptionsLogUpdateRateLabel->setEnabled(false);
   m_Controls->m_DisableAllTimers->setEnabled(false);
   m_Controls->m_OtherOptionsGroupBox->setEnabled(false);
+  m_Controls->m_EnableOpenIGTLinkMicroService->setEnabled(false);
+  m_Controls->m_OpenIGTLinkDataFormat->setEnabled(false);
 }
 
 void QmitkMITKIGTTrackingToolboxView::EnableOptionsButtons()
@@ -1105,6 +1077,8 @@ void QmitkMITKIGTTrackingToolboxView::EnableOptionsButtons()
   m_Controls->m_UseDifferentUpdateRates->setEnabled(true);
   m_Controls->m_DisableAllTimers->setEnabled(true);
   m_Controls->m_OtherOptionsGroupBox->setEnabled(true);
+  m_Controls->m_EnableOpenIGTLinkMicroService->setEnabled(true);
+  m_Controls->m_OpenIGTLinkDataFormat->setEnabled(true);
   OnToggleDifferentUpdateRates();
 }
 
@@ -1138,7 +1112,7 @@ void QmitkMITKIGTTrackingToolboxView::ReplaceCurrentToolStorage(mitk::Navigation
 {
   //first: get rid of the old one
   //don't reset if there is no tool storage. BugFix #17793
-  if ( m_toolStorage.IsNotNull() ){
+  if (m_toolStorage.IsNotNull()){
     m_toolStorage->UnLockStorage(); //only to be sure...
     m_toolStorage->UnRegisterMicroservice();
     m_toolStorage = nullptr;
@@ -1152,13 +1126,12 @@ void QmitkMITKIGTTrackingToolboxView::ReplaceCurrentToolStorage(mitk::Navigation
 
 void QmitkMITKIGTTrackingToolboxView::OnTimeOut()
 {
-  MITK_INFO << "Time Out";
   m_WorkerThread->terminate();
   m_WorkerThread->wait();
-
   m_TimeoutTimer->stop();
 }
 
+//! [StoreUISettings]
 void QmitkMITKIGTTrackingToolboxView::StoreUISettings()
 {
   // persistence service does not directly work in plugins for now
@@ -1166,33 +1139,39 @@ void QmitkMITKIGTTrackingToolboxView::StoreUISettings()
   QSettings settings;
 
   settings.beginGroup(QString::fromStdString(VIEW_ID));
-
+  MITK_DEBUG << "Store UI settings";
   // set the values of some widgets and attrbutes to the QSettings
   settings.setValue("ShowTrackingVolume", QVariant(m_Controls->m_ShowTrackingVolume->isChecked()));
   settings.setValue("toolStorageFilename", QVariant(m_ToolStorageFilename));
   settings.setValue("VolumeSelectionBox", QVariant(m_Controls->m_VolumeSelectionBox->currentIndex()));
-
+  settings.setValue("SimpleModeEnabled", QVariant(m_SimpleModeEnabled));
+  settings.setValue("OpenIGTLinkDataFormat", QVariant(m_Controls->m_OpenIGTLinkDataFormat->currentIndex()));
+  settings.setValue("EnableOpenIGTLinkMicroService", QVariant(m_Controls->m_EnableOpenIGTLinkMicroService->isChecked()));
   settings.endGroup();
 }
+//! [StoreUISettings]
 
+//! [LoadUISettings]
 void QmitkMITKIGTTrackingToolboxView::LoadUISettings()
 {
-  // persistence service does not directly work in plugins for now
-  // -> using QSettings
+  // persistence service does not directly work in plugins for now -> using QSettings
   QSettings settings;
 
   settings.beginGroup(QString::fromStdString(VIEW_ID));
 
   // set some widgets and attributes by the values from the QSettings
   m_Controls->m_ShowTrackingVolume->setChecked(settings.value("ShowTrackingVolume", true).toBool());
+  m_Controls->m_EnableOpenIGTLinkMicroService->setChecked(settings.value("EnableOpenIGTLinkMicroService", true).toBool());
   m_Controls->m_VolumeSelectionBox->setCurrentIndex(settings.value("VolumeSelectionBox", 0).toInt());
+  m_Controls->m_OpenIGTLinkDataFormat->setCurrentIndex(settings.value("OpenIGTLinkDataFormat", 0).toInt());
   m_ToolStorageFilename = settings.value("toolStorageFilename", QVariant("")).toString();
-
+  if (settings.value("SimpleModeEnabled", false).toBool()) { this->OnToggleAdvancedSimpleMode(); }
   settings.endGroup();
+  //! [LoadUISettings]
 
-
+  //! [LoadToolStorage]
   // try to deserialize the tool storage from the given tool storage file name
-  if ( ! m_ToolStorageFilename.isEmpty() )
+  if (!m_ToolStorageFilename.isEmpty())
   {
     // try-catch block for exceptions
     try
@@ -1209,12 +1188,13 @@ void QmitkMITKIGTTrackingToolboxView::LoadUISettings()
       m_Controls->m_TrackingToolsStatusWidget->RemoveStatusLabels();
       m_Controls->m_TrackingToolsStatusWidget->PreShowTools(m_toolStorage);
     }
-    catch(mitk::IGTException)
+    catch (mitk::IGTException)
     {
-      MITK_WARN("QmitkMITKIGTTrackingToolBoxView") << "Error during restoring tools. Problems with file ("<<m_ToolStorageFilename.toStdString()<<"), please check the file?";
+      MITK_WARN("QmitkMITKIGTTrackingToolBoxView") << "Error during restoring tools. Problems with file (" << m_ToolStorageFilename.toStdString() << "), please check the file?";
       this->OnResetTools(); //if there where errors reset the tool storage to avoid problems later on
     }
   }
+  //! [LoadToolStorage]
 }
 
 void QmitkMITKIGTTrackingToolboxView::UpdateToolStorageLabel(QString pathOfLoadedStorage)
@@ -1222,10 +1202,10 @@ void QmitkMITKIGTTrackingToolboxView::UpdateToolStorageLabel(QString pathOfLoade
   QFileInfo myPath(pathOfLoadedStorage); //use this to seperate filename from path
   QString toolLabel = myPath.fileName();
   if (toolLabel.size() > 45) //if the tool storage name is to long trimm the string
-    {
+  {
     toolLabel.resize(40);
-    toolLabel+="[...]";
-    }
+    toolLabel += "[...]";
+  }
   m_Controls->m_toolLabel->setText(toolLabel);
 }
 
@@ -1233,9 +1213,8 @@ void QmitkMITKIGTTrackingToolboxView::AutoSaveToolStorage()
 {
   m_ToolStorageFilename = m_AutoSaveFilename;
   mitk::NavigationToolStorageSerializer::Pointer mySerializer = mitk::NavigationToolStorageSerializer::New();
-  mySerializer->Serialize(m_ToolStorageFilename.toStdString(),m_toolStorage);
+  mySerializer->Serialize(m_ToolStorageFilename.toStdString(), m_toolStorage);
 }
-
 
 void QmitkMITKIGTTrackingToolboxViewWorker::SetWorkerMethod(WorkerMethod w)
 {
@@ -1267,9 +1246,10 @@ void QmitkMITKIGTTrackingToolboxViewWorker::SetNavigationToolStorage(mitk::Navig
   m_NavigationToolStorage = n;
 }
 
+//! [Thread 7]
 void QmitkMITKIGTTrackingToolboxViewWorker::ThreadFunc()
 {
-  switch(m_WorkerMethod)
+  switch (m_WorkerMethod)
   {
   case eAutoDetectTools:
     this->AutoDetectTools();
@@ -1289,107 +1269,77 @@ void QmitkMITKIGTTrackingToolboxViewWorker::ThreadFunc()
   default:
     MITK_WARN << "Undefined worker method was set ... something went wrong!";
     break;
-    }
+  }
 }
+//! [Thread 7]
 
 void QmitkMITKIGTTrackingToolboxViewWorker::AutoDetectTools()
 {
-  mitk::ProgressBar::GetInstance()->AddStepsToDo(4);
+  //mitk::ProgressBar::GetInstance()->AddStepsToDo(2);
   mitk::NavigationToolStorage::Pointer autoDetectedStorage = mitk::NavigationToolStorage::New(m_DataStorage);
-  mitk::NDITrackingDevice::Pointer currentDevice = dynamic_cast<mitk::NDITrackingDevice*>(m_TrackingDevice.GetPointer());
   try
   {
-    currentDevice->OpenConnection();
-    mitk::ProgressBar::GetInstance()->Progress();
-    currentDevice->StartTracking();
+    mitk::NavigationToolStorage::Pointer tempStorage = m_TrackingDevice->AutoDetectTools();
+    //mitk::ProgressBar::GetInstance()->Progress();
+    for (int i = 0; i < tempStorage->GetToolCount(); i++) { autoDetectedStorage->AddTool(tempStorage->GetTool(i)); }
   }
-  catch(mitk::Exception& e)
+  catch (mitk::Exception& e)
   {
-    QString message = QString("Warning, can not auto-detect tools! (") + QString(e.GetDescription()) + QString(")");
-    //MessageBox(message.toStdString()); //TODO: give message to the user here!
-
-    MITK_WARN << message.toStdString();
-    mitk::ProgressBar::GetInstance()->Progress(4);
-    emit AutoDetectToolsFinished(false,message.toStdString().c_str());
+    MITK_WARN << e.GetDescription();
+    //mitk::ProgressBar::GetInstance()->Reset();
+    emit AutoDetectToolsFinished(false, e.GetDescription());
     return;
   }
-
-  for (unsigned int i=0; i<currentDevice->GetToolCount(); i++)
-  {
-    //create a navigation tool with sphere as surface
-    std::stringstream toolname;
-    toolname << "AutoDetectedTool" << i;
-    mitk::NavigationTool::Pointer newTool = mitk::NavigationTool::New();
-    newTool->SetSerialNumber(dynamic_cast<mitk::NDIPassiveTool*>(currentDevice->GetTool(i))->GetSerialNumber());
-    newTool->SetIdentifier(toolname.str());
-    newTool->SetTrackingDeviceType(mitk::NDIAuroraTypeInformation::GetTrackingDeviceName());
-    mitk::DataNode::Pointer newNode = mitk::DataNode::New();
-    mitk::Surface::Pointer mySphere = mitk::Surface::New();
-    vtkSphereSource *vtkData = vtkSphereSource::New();
-    vtkData->SetRadius(3.0f);
-    vtkData->SetCenter(0.0, 0.0, 0.0);
-    vtkData->Update();
-    mySphere->SetVtkPolyData(vtkData->GetOutput());
-    vtkData->Delete();
-    newNode->SetData(mySphere);
-    newNode->SetName(toolname.str());
-    newTool->SetDataNode(newNode);
-    autoDetectedStorage->AddTool(newTool);
-  }
-
   m_NavigationToolStorage = autoDetectedStorage;
-
-  currentDevice->StopTracking();
-  mitk::ProgressBar::GetInstance()->Progress();
-  currentDevice->CloseConnection();
-
-  emit AutoDetectToolsFinished(true,"");
-  mitk::ProgressBar::GetInstance()->Progress(4);
+  //::ProgressBar::GetInstance()->Progress();
+  emit AutoDetectToolsFinished(true, "");
 }
 
 void QmitkMITKIGTTrackingToolboxViewWorker::ConnectDevice()
 {
   std::string message = "";
-  mitk::ProgressBar::GetInstance()->AddStepsToDo(10);
+  //mitk::ProgressBar::GetInstance()->AddStepsToDo(4);
 
   //build the IGT pipeline
   mitk::TrackingDevice::Pointer trackingDevice = m_TrackingDevice;
   trackingDevice->SetData(m_TrackingDeviceData);
 
   //set device to rotation mode transposed becaus we are working with VNL style quaternions
-  if(m_InverseMode)
-  {trackingDevice->SetRotationMode(mitk::TrackingDevice::RotationTransposed);}
+  if (m_InverseMode)
+  {
+    trackingDevice->SetRotationMode(mitk::TrackingDevice::RotationTransposed);
+  }
 
   //Get Tracking Volume Data
   mitk::TrackingDeviceData data = m_TrackingDeviceData;
-  mitk::ProgressBar::GetInstance()->Progress();
+  //mitk::ProgressBar::GetInstance()->Progress();
 
   //Create Navigation Data Source with the factory class
-  mitk::TrackingDeviceSourceConfigurator::Pointer myTrackingDeviceSourceFactory = mitk::TrackingDeviceSourceConfigurator::New(m_NavigationToolStorage,trackingDevice);
+  mitk::TrackingDeviceSourceConfigurator::Pointer myTrackingDeviceSourceFactory = mitk::TrackingDeviceSourceConfigurator::New(m_NavigationToolStorage, trackingDevice);
   m_TrackingDeviceSource = myTrackingDeviceSourceFactory->CreateTrackingDeviceSource(m_ToolVisualizationFilter);
-  mitk::ProgressBar::GetInstance()->Progress();
+  //mitk::ProgressBar::GetInstance()->Progress();
 
-  if ( m_TrackingDeviceSource.IsNull() )
+  if (m_TrackingDeviceSource.IsNull())
   {
     message = std::string("Cannot connect to device: ") + myTrackingDeviceSourceFactory->GetErrorMessage();
-    emit ConnectDeviceFinished(false,QString(message.c_str()));
+    emit ConnectDeviceFinished(false, QString(message.c_str()));
     return;
   }
 
   //set filter to rotation mode transposed becaus we are working with VNL style quaternions
-  if(m_InverseMode)
+  if (m_InverseMode)
     m_ToolVisualizationFilter->SetRotationMode(mitk::NavigationDataObjectVisualizationFilter::RotationTransposed);
 
   //First check if the created object is valid
   if (m_TrackingDeviceSource.IsNull())
   {
     message = myTrackingDeviceSourceFactory->GetErrorMessage();
-    emit ConnectDeviceFinished(false,QString(message.c_str()));
+    emit ConnectDeviceFinished(false, QString(message.c_str()));
     return;
   }
 
   MITK_INFO << "Number of tools: " << m_TrackingDeviceSource->GetNumberOfOutputs();
-  mitk::ProgressBar::GetInstance()->Progress();
+  //mitk::ProgressBar::GetInstance()->Progress();
 
   //The tools are maybe reordered after initialization, e.g. in case of auto-detected tools of NDI Aurora
   mitk::NavigationToolStorage::Pointer toolsInNewOrder = myTrackingDeviceSourceFactory->GetUpdatedNavigationToolStorage();
@@ -1406,20 +1356,19 @@ void QmitkMITKIGTTrackingToolboxViewWorker::ConnectDevice()
 
     This was replaced and thereby fixed Bug 18318 DeleteAllTools() is not Threadsafe!
     */
-    for(int i = 0; i < toolsInNewOrder->GetToolCount(); i++ )
+    for (int i = 0; i < toolsInNewOrder->GetToolCount(); i++)
     {
-      m_NavigationToolStorage->AssignToolNumber(toolsInNewOrder->GetTool(i)->GetIdentifier(),i);
+      m_NavigationToolStorage->AssignToolNumber(toolsInNewOrder->GetTool(i)->GetIdentifier(), i);
     }
-
   }
 
-  mitk::ProgressBar::GetInstance()->Progress();
+  //mitk::ProgressBar::GetInstance()->Progress();
 
   //connect to device
   try
   {
     m_TrackingDeviceSource->Connect();
-    mitk::ProgressBar::GetInstance()->Progress();
+    //mitk::ProgressBar::GetInstance()->Reset();
     //Microservice registration:
     m_TrackingDeviceSource->RegisterAsMicroservice();
     m_NavigationToolStorage->UnRegisterMicroservice();
@@ -1429,11 +1378,11 @@ void QmitkMITKIGTTrackingToolboxViewWorker::ConnectDevice()
   catch (...) //todo: change to mitk::IGTException
   {
     message = "Error on connecting the tracking device.";
-    emit ConnectDeviceFinished(false,QString(message.c_str()));
+    emit ConnectDeviceFinished(false, QString(message.c_str()));
     return;
   }
-  emit ConnectDeviceFinished(true,QString(message.c_str()));
-  mitk::ProgressBar::GetInstance()->Progress(10);
+  emit ConnectDeviceFinished(true, QString(message.c_str()));
+  //mitk::ProgressBar::GetInstance()->Reset();
 }
 
 void QmitkMITKIGTTrackingToolboxViewWorker::StartTracking()
@@ -1446,13 +1395,13 @@ void QmitkMITKIGTTrackingToolboxViewWorker::StartTracking()
   catch (...) //todo: change to mitk::IGTException
   {
     errorMessage += "Error while starting the tracking device!";
-    emit StartTrackingFinished(false,errorMessage);
+    emit StartTrackingFinished(false, errorMessage);
     return;
   }
   //remember the original colors of the tools
-  m_OriginalColors = std::map<mitk::DataNode::Pointer,mitk::Color>();
-  for(int i=0; i<this->m_NavigationToolStorage->GetToolCount(); i++)
-    {
+  m_OriginalColors = std::map<mitk::DataNode::Pointer, mitk::Color>();
+  for (int i = 0; i < this->m_NavigationToolStorage->GetToolCount(); i++)
+  {
     mitk::DataNode::Pointer currentToolNode = m_NavigationToolStorage->GetTool(i)->GetDataNode();
     float c[3];
     currentToolNode->GetColor(c);
@@ -1461,9 +1410,9 @@ void QmitkMITKIGTTrackingToolboxViewWorker::StartTracking()
     color.SetGreen(c[1]);
     color.SetBlue(c[2]);
     m_OriginalColors[currentToolNode] = color;
-    }
+  }
 
-  emit StartTrackingFinished(true,errorMessage);
+  emit StartTrackingFinished(true, errorMessage);
 }
 
 void QmitkMITKIGTTrackingToolboxViewWorker::StopTracking()
@@ -1473,19 +1422,23 @@ void QmitkMITKIGTTrackingToolboxViewWorker::StopTracking()
   {
     m_TrackingDeviceSource->StopTracking();
   }
-  catch(mitk::Exception& e)
+  catch (mitk::Exception& e)
   {
     emit StopTrackingFinished(false, e.GetDescription());
   }
 
   //restore the original colors of the tools
-  for(int i=0; i<this->m_NavigationToolStorage->GetToolCount(); i++)
+  for (int i = 0; i < this->m_NavigationToolStorage->GetToolCount(); i++)
   {
     mitk::DataNode::Pointer currentToolNode = m_NavigationToolStorage->GetTool(i)->GetDataNode();
     if (m_OriginalColors.find(currentToolNode) == m_OriginalColors.end())
-      {MITK_WARN << "Cannot restore original color of tool " << m_NavigationToolStorage->GetTool(i)->GetToolName();}
+    {
+      MITK_WARN << "Cannot restore original color of tool " << m_NavigationToolStorage->GetTool(i)->GetToolName();
+    }
     else
-      {currentToolNode->SetColor(m_OriginalColors[currentToolNode]);}
+    {
+      currentToolNode->SetColor(m_OriginalColors[currentToolNode]);
+    }
   }
 
   //emit signal
@@ -1496,12 +1449,12 @@ void QmitkMITKIGTTrackingToolboxViewWorker::DisconnectDevice()
 {
   try
   {
-    if (m_TrackingDeviceSource->IsTracking()) {m_TrackingDeviceSource->StopTracking();}
+    if (m_TrackingDeviceSource->IsTracking()) { m_TrackingDeviceSource->StopTracking(); }
     m_TrackingDeviceSource->Disconnect();
     m_TrackingDeviceSource->UnRegisterMicroservice();
     m_NavigationToolStorage->UnLockStorage();
   }
-  catch(mitk::Exception& e)
+  catch (mitk::Exception& e)
   {
     emit DisconnectDeviceFinished(false, e.GetDescription());
   }

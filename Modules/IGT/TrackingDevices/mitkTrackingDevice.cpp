@@ -30,8 +30,8 @@ typedef itk::MutexLockHolder<itk::FastMutexLock> MutexLockHolder;
 
 
 mitk::TrackingDevice::TrackingDevice() :
-m_Data(mitk::UnspecifiedTrackingTypeInformation::GetDeviceDataUnspecified()),
   m_State(mitk::TrackingDevice::Setup),
+  m_Data(mitk::UnspecifiedTrackingTypeInformation::GetDeviceDataUnspecified()),
   m_StopTracking(false),
   m_RotationMode(mitk::TrackingDevice::RotationStandard)
 
@@ -39,7 +39,6 @@ m_Data(mitk::UnspecifiedTrackingTypeInformation::GetDeviceDataUnspecified()),
   m_StopTrackingMutex = itk::FastMutexLock::New();
   m_StateMutex = itk::FastMutexLock::New();
   m_TrackingFinishedMutex = itk::FastMutexLock::New();
-  m_TrackingFinishedMutex->Lock();  // execution rights are owned by the application thread at the beginning
 }
 
 
@@ -53,6 +52,16 @@ return true;
 //this is the default for all tracking device
 //If a device needs installation please reimplement
 //this method in the subclass.
+}
+
+bool mitk::TrackingDevice::AutoDetectToolsAvailable()
+{
+  return false;
+}
+
+mitk::NavigationToolStorage::Pointer mitk::TrackingDevice::AutoDetectTools()
+{
+  return mitk::NavigationToolStorage::New();
 }
 
 
@@ -76,7 +85,7 @@ void mitk::TrackingDevice::SetState( TrackingDeviceState state )
   this->Modified();
 }
 
-void mitk::TrackingDevice::SetRotationMode(RotationMode r)
+void mitk::TrackingDevice::SetRotationMode(RotationMode)
 {
   MITK_WARN << "Rotation mode switching is not implemented for this device. Leaving it at mitk::TrackingDevice::RotationStandard";
 }
@@ -122,6 +131,7 @@ bool mitk::TrackingDevice::StopTracking()
     // StopTracking was called, thus the mode should be changed back
     //   to Ready now that the tracking loop has ended.
     this->SetState(Ready);
+    m_TrackingFinishedMutex->Unlock();
   }
   return true;
 }

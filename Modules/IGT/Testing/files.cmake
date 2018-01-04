@@ -51,6 +51,7 @@ set(MODULE_TESTS
    mitkTrackingTypesTest.cpp
    mitkOpenIGTLinkTrackingDeviceTest.cpp
    # ------------------ Navigation Tool Management Tests -------------------
+   mitkNavigationToolStorageDeserializerTest.cpp # Activated experimentally on dart clients, see task T17303 for details.
    mitkNavigationToolStorageTest.cpp
    mitkNavigationToolTest.cpp
    # -----------------------------------------------------------------------
@@ -61,7 +62,14 @@ set(MODULE_CUSTOM_TESTS
   mitkNDIPolarisHardwareTest.cpp
   mitkClaronTrackingDeviceHardwareTest.cpp
   mitkNavigationToolReaderAndWriterTest.cpp #deactivated because of bug 18835
-  mitkNavigationToolStorageDeserializerTest.cpp # This test was disabled because of bug 17303.
   mitkNavigationToolStorageSerializerAndDeserializerIntegrationTest.cpp # This test was disabled because of bug 17181.
   mitkNavigationToolStorageSerializerTest.cpp # This test was disabled because of bug 18671
+  #mitkPolhemusTrackingDeviceHardwareTest.cpp
 )
+
+if(MITK_USE_POLHEMUS_TRACKER)
+set(MODULE_CUSTOM_TESTS
+  ${MODULE_CUSTOM_TESTS}
+  mitkPolhemusTrackingDeviceHardwareTest.cpp
+)
+endif(MITK_USE_POLHEMUS_TRACKER)

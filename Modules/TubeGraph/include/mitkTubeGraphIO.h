@@ -27,7 +27,6 @@ class TiXmlElement;
 
 namespace mitk
 {
-
   /**
   * @brief reader and writer for xml representations of mitk::TubeGraph
   *
@@ -36,20 +35,19 @@ namespace mitk
   class TubeGraphIO : public mitk::AbstractFileIO
   {
   public:
-
     TubeGraphIO();
 
     // -------------- AbstractFileReader -------------
 
     using AbstractFileReader::Read;
-    virtual std::vector<BaseData::Pointer> Read() override;
+    std::vector<BaseData::Pointer> Read() override;
 
-    virtual ConfidenceLevel GetReaderConfidenceLevel() const override;
+    ConfidenceLevel GetReaderConfidenceLevel() const override;
 
     // -------------- AbstractFileWriter -------------
 
-    virtual void Write() override;
-    virtual ConfidenceLevel GetWriterConfidenceLevel() const override;
+    void Write() override;
+    ConfidenceLevel GetWriterConfidenceLevel() const override;
 
     static CustomMimeType TUBEGRAPH_MIMETYPE() // tsf
     {
@@ -66,12 +64,10 @@ namespace mitk
     }
 
   private:
-    TubeGraphIO* IOClone() const override;
-    TubeGraphIO(const TubeGraphIO& other);
-    const BoundingBox::Pointer ComputeBoundingBox(TubeGraph::Pointer graph ) const;
-
+    TubeGraphIO *IOClone() const override;
+    TubeGraphIO(const TubeGraphIO &other);
+    const BoundingBox::Pointer ComputeBoundingBox(TubeGraph::Pointer graph) const;
   };
-
 }
 
 #endif //_MITK_SURFACE_VTK_IO_H_

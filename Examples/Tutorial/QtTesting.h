@@ -16,12 +16,12 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 //#include <QObject>
 
-int QtTesting();
+int QtTesting(void);
 
-//class QtTestingClass : public QObject
+// class QtTestingClass : public QObject
 //{
 //  Q_OBJECT
-//public:
+// public:
 //  QtTestingClass( QObject * parent = 0, const char * name = 0 );
 //
 //}

@@ -34,8 +34,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <QmitkMouseModeSwitcher.h>
 #include <QmitkStdMultiWidget.h>
 
-#include <mbilogo.h>
-
 class QmitkStdMultiWidgetEditorPrivate
 {
 public:
@@ -67,7 +65,7 @@ struct QmitkStdMultiWidgetPartListener : public berry::IPartListener
 
   Events::Types GetPartEventTypes() const override
   {
-    return Events::CLOSED | Events::HIDDEN | Events::VISIBLE;
+    return Events::CLOSED | Events::HIDDEN | Events::VISIBLE | Events::OPENED;
   }
 
   void PartClosed(const berry::IWorkbenchPartReference::Pointer& partRef) override
@@ -92,13 +90,25 @@ struct QmitkStdMultiWidgetPartListener : public berry::IPartListener
 
       if (d->m_StdMultiWidget == stdMultiWidgetEditor->GetStdMultiWidget())
       {
-        d->m_StdMultiWidget->RemovePlanesFromDataStorage();
         stdMultiWidgetEditor->RequestActivateMenuWidget(false);
       }
     }
   }
 
   void PartVisible(const berry::IWorkbenchPartReference::Pointer& partRef) override
+  {
+    if (partRef->GetId() == QmitkStdMultiWidgetEditor::EDITOR_ID)
+    {
+      QmitkStdMultiWidgetEditor::Pointer stdMultiWidgetEditor = partRef->GetPart(false).Cast<QmitkStdMultiWidgetEditor>();
+
+      if (d->m_StdMultiWidget == stdMultiWidgetEditor->GetStdMultiWidget())
+      {
+        stdMultiWidgetEditor->RequestActivateMenuWidget(true);
+      }
+    }
+  }
+
+  void PartOpened(const berry::IWorkbenchPartReference::Pointer& partRef) override
   {
     if (partRef->GetId() == QmitkStdMultiWidgetEditor::EDITOR_ID)
     {
@@ -262,7 +272,7 @@ void QmitkStdMultiWidgetEditor::CreateQtPartControl(QWidget* parent)
     QHBoxLayout* layout = new QHBoxLayout(parent);
     layout->setContentsMargins(0,0,0,0);
 
-    if (d->m_MouseModeToolbar == NULL)
+    if (d->m_MouseModeToolbar == nullptr)
     {
       d->m_MouseModeToolbar = new QmitkMouseModeSwitcher(parent); // delete by Qt via parent
       layout->addWidget(d->m_MouseModeToolbar);
@@ -326,6 +336,11 @@ void QmitkStdMultiWidgetEditor::OnPreferencesChanged(const berry::IBerryPreferen
   // If no logo was set for this plug-in specifically, walk the parent preference nodes
   // and lookup a logo value there.
 
+  //We need to disable the logo first, otherwise setting a new logo will have no effect due to how mitkManufacturerLogo works
+  d->m_StdMultiWidget->DisableDepartmentLogo();
+  d->m_StdMultiWidget->SetDepartmentLogo(qPrintable(":/org.mitk.gui.qt.stdmultiwidgeteditor/defaultWatermark.png"));
+  d->m_StdMultiWidget->EnableDepartmentLogo();
+
   const berry::IPreferences* currentNode = prefs;
 
   while(currentNode)
@@ -346,7 +361,7 @@ void QmitkStdMultiWidgetEditor::OnPreferencesChanged(const berry::IBerryPreferen
           // we need to disable the logo first, otherwise setting a new logo will have
           // no effect due to how mitkManufacturerLogo works...
           d->m_StdMultiWidget->DisableDepartmentLogo();
-          d->m_StdMultiWidget->SetDepartmentLogoPath(qPrintable(departmentLogoLocation));
+          d->m_StdMultiWidget->SetDepartmentLogo(qPrintable(departmentLogoLocation));
           d->m_StdMultiWidget->EnableDepartmentLogo();
         }
         logoFound = true;

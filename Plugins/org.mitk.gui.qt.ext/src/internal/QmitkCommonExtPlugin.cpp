@@ -41,7 +41,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 #include <QProcess>
 #include <QMainWindow>
-#include <QtPlugin>
 
 ctkPluginContext* QmitkCommonExtPlugin::_context = 0;
 
@@ -107,7 +106,13 @@ void QmitkCommonExtPlugin::loadDataFromDisk(const QStringList &arguments, bool g
            try
            {
              const std::string path(arguments[i].toStdString());
-             mitk::IOUtil::Load(path, *dataStorage);
+             auto addedNodes = mitk::IOUtil::Load(path, *dataStorage);
+
+             for (auto const node : *addedNodes )
+             {
+               node->SetIntProperty("layer", argumentsAdded);
+             }
+
              argumentsAdded++;
            }
            catch(...)
@@ -220,7 +225,3 @@ void QmitkCommonExtPlugin::handleIPCMessage(const QByteArray& msg)
   }
 
 }
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-  Q_EXPORT_PLUGIN2(org_mitk_gui_qt_ext, QmitkCommonExtPlugin)
-#endif

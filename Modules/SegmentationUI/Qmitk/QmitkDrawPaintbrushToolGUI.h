@@ -33,24 +33,20 @@ class MITKSEGMENTATIONUI_EXPORT QmitkDrawPaintbrushToolGUI : public QmitkPaintbr
 {
   Q_OBJECT
 
-  public:
+public:
+  mitkClassMacro(QmitkDrawPaintbrushToolGUI, QmitkPaintbrushToolGUI);
+  itkFactorylessNewMacro(Self) itkCloneMacro(Self)
 
-    mitkClassMacro(QmitkDrawPaintbrushToolGUI, QmitkPaintbrushToolGUI);
-    itkFactorylessNewMacro(Self)
-    itkCloneMacro(Self)
+    ~QmitkDrawPaintbrushToolGUI() override;
 
-    virtual ~QmitkDrawPaintbrushToolGUI();
+signals:
 
-  signals:
+public slots:
 
-  public slots:
+protected slots:
 
-  protected slots:
-
-  protected:
-
-    QmitkDrawPaintbrushToolGUI();
+protected:
+  QmitkDrawPaintbrushToolGUI();
 };
 
 #endif
-

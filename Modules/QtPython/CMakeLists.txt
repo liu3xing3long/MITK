@@ -1,4 +1,6 @@
 if(MITK_USE_Python)
+  mitkFunctionCheckCompilerFlags("/wd4273" CMAKE_CXX_FLAGS)
+
   set(OpenCV_DEP )
   if(MITK_USE_OpenCV)
     set(OpenCV_DEP OpenCV)
@@ -7,7 +9,7 @@ if(MITK_USE_Python)
   mitk_create_module(
     DEPENDS MitkCore MitkQtWidgets MitkPython
     PACKAGE_DEPENDS
-    PUBLIC Qt4|QtGui Qt5|Widgets CTK|CTKScriptingPythonCore+CTKScriptingPythonWidgets
+    PUBLIC Qt5|Widgets CTK|CTKScriptingPythonCore+CTKScriptingPythonWidgets
     )
 
   # temporarily disabled, bug-19153

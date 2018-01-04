@@ -13,16 +13,14 @@ A PARTICULAR PURPOSE.
 See LICENSE.txt or http://www.mitk.org for details.
 
 ===================================================================*/
+
 #include "mitkPluginActivator.h"
-
-#include <QtPlugin>
-
 #include "src/internal/QmitkTubeGraphView.h"
 
 namespace mitk
 {
 
-  ctkPluginContext* PluginActivator::m_context = NULL;
+  ctkPluginContext* PluginActivator::m_context = nullptr;
 
   void PluginActivator::start(ctkPluginContext* context)
   {
@@ -30,9 +28,9 @@ namespace mitk
     this->m_context = context;
   }
 
-  void PluginActivator::stop(ctkPluginContext* context)
+  void PluginActivator::stop(ctkPluginContext*)
   {
-    this->m_context = NULL;
+    this->m_context = nullptr;
   }
 
   ctkPluginContext* PluginActivator::getContext()
@@ -41,7 +39,3 @@ namespace mitk
   }
 
 } //namespace
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-  Q_EXPORT_PLUGIN2(org_mitk_gui_qt_tubegraph, mitk::PluginActivator)
-#endif

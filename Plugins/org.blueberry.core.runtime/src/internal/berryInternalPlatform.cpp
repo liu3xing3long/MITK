@@ -176,11 +176,7 @@ void InternalPlatform::InitializePluginPaths()
   {
     // Append a hash value of the absolute path of the executable to the data location.
     // This allows to start the same application from different build or install trees.
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     dataLocation = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + this->getOrganizationName() + "/" + this->getApplicationName() + '_';
-#else
-    dataLocation = QDesktopServices::storageLocation(QDesktopServices::DataLocation) + '_';
-#endif
     dataLocation += QString::number(qHash(QCoreApplication::applicationDirPath())) + "/";
     m_UserPath.setPath(dataLocation);
   }
@@ -315,6 +311,26 @@ void InternalPlatform::CloseServiceTrackers()
     m_DebugTracker->close();
     m_DebugTracker.reset();
   }
+
+  if (!configurationLocation.isNull()) {
+    configurationLocation->close();
+    configurationLocation.reset();
+  }
+
+  if (!installLocation.isNull()) {
+    installLocation->close();
+    installLocation.reset();
+  }
+
+  if (!instanceLocation.isNull()) {
+    instanceLocation->close();
+    instanceLocation.reset();
+  }
+
+  if (!userLocation.isNull()) {
+    userLocation->close();
+    userLocation.reset();
+  }
 }
 
 void InternalPlatform::InitializeDebugFlags()
@@ -345,13 +361,13 @@ ctkLocation* InternalPlatform::GetConfigurationLocation()
 ctkLocation* InternalPlatform::GetInstallLocation()
 {
   this->AssertInitialized();
-  return configurationLocation->getService();
+  return installLocation->getService();
 }
 
 ctkLocation* InternalPlatform::GetInstanceLocation()
 {
   this->AssertInitialized();
-  return installLocation->getService();
+  return instanceLocation->getService();
 }
 
 QDir InternalPlatform::GetStateLocation(const QSharedPointer<ctkPlugin>& plugin)

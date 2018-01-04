@@ -59,6 +59,8 @@ set(MODULE_TESTS
   mitkProgressBarTest.cpp
   mitkPropertyTest.cpp
   mitkPropertyListTest.cpp
+  mitkPropertyPersistenceTest.cpp
+  mitkPropertyPersistenceInfoTest.cpp
   mitkSlicedGeometry3DTest.cpp
   mitkSliceNavigationControllerTest.cpp
   mitkSurfaceTest.cpp
@@ -73,8 +75,11 @@ set(MODULE_TESTS
   mitkTransferFunctionTest.cpp
   mitkStepperTest.cpp
   mitkRenderingManagerTest.cpp
+  mitkCompositePixelValueToStringTest.cpp
   vtkMitkThickSlicesFilterTest.cpp
   mitkNodePredicateSourceTest.cpp
+  mitkNodePredicateDataPropertyTest.cpp
+  mitkNodePredicateFunctionTest.cpp
   mitkVectorTest.cpp
   mitkClippedSurfaceBoundsCalculatorTest.cpp
   mitkExceptionTest.cpp
@@ -83,13 +88,13 @@ set(MODULE_TESTS
   mitkImageDimensionConverterTest.cpp
   mitkLoggingAdapterTest.cpp
   mitkUIDGeneratorTest.cpp
-  mitkShaderRepositoryTest.cpp
   mitkPlanePositionManagerTest.cpp
   mitkAffineTransformBaseTest.cpp
   mitkPropertyAliasesTest.cpp
   mitkPropertyDescriptionsTest.cpp
   mitkPropertyExtensionsTest.cpp
   mitkPropertyFiltersTest.cpp
+  mitkPropertyKeyPathTest.cpp
   mitkTinyXMLTest.cpp
   mitkRawImageFileReaderTest.cpp
   mitkInteractionEventTest.cpp
@@ -109,6 +114,10 @@ set(MODULE_TESTS
   mitkRotatedSlice4DTest.cpp
   mitkLevelWindowManagerCppUnitTest.cpp
   mitkVectorPropertyTest.cpp
+  mitkTemporoSpatialStringPropertyTest.cpp
+  mitkPropertyNameHelperTest.cpp
+  mitkNodePredicateGeometryTest.cpp
+  mitkPreferenceListReaderOptionsFunctorTest.cpp
 )
 
 if(MITK_ENABLE_RENDERING_TESTING)

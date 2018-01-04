@@ -23,22 +23,18 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 namespace mitk
 {
-
-class MITKSCENESERIALIZATIONBASE_EXPORT EnumerationPropertySerializer : public BasePropertySerializer
-{
+  class MITKSCENESERIALIZATIONBASE_EXPORT EnumerationPropertySerializer : public BasePropertySerializer
+  {
   public:
+    mitkClassMacro(EnumerationPropertySerializer, BasePropertySerializer);
 
-    mitkClassMacro( EnumerationPropertySerializer, BasePropertySerializer );
-
-    virtual TiXmlElement* Serialize() override;
+    TiXmlElement *Serialize() override;
 
   protected:
-
     EnumerationPropertySerializer();
-    virtual ~EnumerationPropertySerializer();
-};
+    ~EnumerationPropertySerializer() override;
+  };
 
 } // namespace
 
 #endif
-

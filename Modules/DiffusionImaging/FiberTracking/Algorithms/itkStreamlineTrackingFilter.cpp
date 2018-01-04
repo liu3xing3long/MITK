@@ -14,877 +14,893 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 ===================================================================*/
 
-#ifndef __itkStreamlineTrackingFilter_txx
-#define __itkStreamlineTrackingFilter_txx
-
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <omp.h>
 #include "itkStreamlineTrackingFilter.h"
 #include <itkImageRegionConstIterator.h>
 #include <itkImageRegionConstIteratorWithIndex.h>
 #include <itkImageRegionIterator.h>
+#include <itkImageFileWriter.h>
+#include "itkPointShell.h"
+#include <itkRescaleIntensityImageFilter.h>
+#include <boost/lexical_cast.hpp>
+#include <TrackingHandlers/mitkTrackingHandlerOdf.h>
+#include <TrackingHandlers/mitkTrackingHandlerPeaks.h>
+#include <TrackingHandlers/mitkTrackingHandlerTensor.h>
+#include <TrackingHandlers/mitkTrackingHandlerRandomForest.h>
+#include <mitkDiffusionFunctionCollection.h>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
 
 namespace itk {
 
-template< class TTensorPixelType, class TPDPixelType>
-StreamlineTrackingFilter< TTensorPixelType,
-TPDPixelType>
+
+StreamlineTrackingFilter
 ::StreamlineTrackingFilter()
-    : m_FiberPolyData(NULL)
-    , m_Points(NULL)
-    , m_Cells(NULL)
-    , m_FaImage(NULL)
-    , m_NumberOfInputs(1)
-    , m_FaThreshold(0.2)
-    , m_MinCurvatureRadius(0)
-    , m_StepSize(0)
-    , m_MaxLength(10000)
-    , m_MinTractLength(0.0)
-    , m_SeedsPerVoxel(1)
-    , m_F(1.0)
-    , m_G(0.0)
-    , m_Interpolate(true)
-    , m_PointPistance(0.0)
-    , m_ResampleFibers(false)
-    , m_SeedImage(NULL)
-    , m_MaskImage(NULL)
+  : m_PauseTracking(false)
+  , m_AbortTracking(false)
+  , m_BuildFibersFinished(false)
+  , m_BuildFibersReady(0)
+  , m_FiberPolyData(nullptr)
+  , m_Points(nullptr)
+  , m_Cells(nullptr)
+  , m_StoppingRegions(nullptr)
+  , m_TargetRegions(nullptr)
+  , m_SeedImage(nullptr)
+  , m_MaskImage(nullptr)
+  , m_OutputProbabilityMap(nullptr)
+  , m_AngularThresholdDeg(-1)
+  , m_StepSizeVox(-1)
+  , m_SamplingDistanceVox(-1)
+  , m_AngularThreshold(-1)
+  , m_StepSize(0)
+  , m_MaxLength(10000)
+  , m_MinTractLength(20.0)
+  , m_MaxTractLength(400.0)
+  , m_SeedsPerVoxel(1)
+  , m_AvoidStop(true)
+  , m_RandomSampling(false)
+  , m_SamplingDistance(-1)
+  , m_DeflectionMod(1.0)
+  , m_OnlyForwardSamples(true)
+  , m_UseStopVotes(true)
+  , m_NumberOfSamples(30)
+  , m_NumPreviousDirections(1)
+  , m_MaxNumTracts(-1)
+  , m_Verbose(true)
+  , m_AposterioriCurvCheck(false)
+  , m_DemoMode(false)
+  , m_Random(true)
+  , m_UseOutputProbabilityMap(false)
+  , m_CurrentTracts(0)
+  , m_Progress(0)
+  , m_StopTracking(false)
+  , m_InterpolateMask(true)
 {
-    // At least 1 inputs is necessary for a vector image.
-    // For images added one at a time we need at least six
-    this->SetNumberOfRequiredInputs( 1 );
-    this->SetNumberOfIndexedInputs(3);
+  this->SetNumberOfRequiredInputs(0);
 }
 
-template< class TTensorPixelType,
-          class TPDPixelType>
-double StreamlineTrackingFilter< TTensorPixelType,
-TPDPixelType>
-::RoundToNearest(double num) {
-    return (num > 0.0) ? floor(num + 0.5) : ceil(num - 0.5);
+std::string StreamlineTrackingFilter::GetStatusText()
+{
+  std::string status = "Seedpoints processed: " + boost::lexical_cast<std::string>(m_Progress) + "/" + boost::lexical_cast<std::string>(m_SeedPoints.size());
+  if (m_SeedPoints.size()>0)
+    status += " (" + boost::lexical_cast<std::string>(100*m_Progress/m_SeedPoints.size()) + "%)";
+  if (m_MaxNumTracts>0)
+    status += "\nFibers accepted: " + boost::lexical_cast<std::string>(m_CurrentTracts) + "/" + boost::lexical_cast<std::string>(m_MaxNumTracts);
+  else
+    status += "\nFibers accepted: " + boost::lexical_cast<std::string>(m_CurrentTracts);
+
+  return status;
 }
 
-template< class TTensorPixelType,
-          class TPDPixelType>
-void StreamlineTrackingFilter< TTensorPixelType,
-TPDPixelType>
-::BeforeThreadedGenerateData()
+void StreamlineTrackingFilter::BeforeTracking()
 {
-    m_FiberPolyData = FiberPolyDataType::New();
-    m_Points = vtkSmartPointer< vtkPoints >::New();
-    m_Cells = vtkSmartPointer< vtkCellArray >::New();
+  m_StopTracking = false;
+  m_TrackingHandler->SetRandom(m_Random);
+  m_TrackingHandler->InitForTracking();
+  m_FiberPolyData = PolyDataType::New();
+  m_Points = vtkSmartPointer< vtkPoints >::New();
+  m_Cells = vtkSmartPointer< vtkCellArray >::New();
 
-    InputImageType* inputImage = static_cast< InputImageType * >( this->ProcessObject::GetInput(0) );
-    m_ImageSize.resize(3);
-    m_ImageSize[0] = inputImage->GetLargestPossibleRegion().GetSize()[0];
-    m_ImageSize[1] = inputImage->GetLargestPossibleRegion().GetSize()[1];
-    m_ImageSize[2] = inputImage->GetLargestPossibleRegion().GetSize()[2];
+  itk::Vector< double, 3 > imageSpacing = m_TrackingHandler->GetSpacing();
 
-    if (m_ImageSize[0]<3 || m_ImageSize[1]<3 || m_ImageSize[2]<3)
-        m_Interpolate = false;
+  float minSpacing;
+  if(imageSpacing[0]<imageSpacing[1] && imageSpacing[0]<imageSpacing[2])
+    minSpacing = imageSpacing[0];
+  else if (imageSpacing[1] < imageSpacing[2])
+    minSpacing = imageSpacing[1];
+  else
+    minSpacing = imageSpacing[2];
 
-    m_ImageSpacing.resize(3);
-    m_ImageSpacing[0] = inputImage->GetSpacing()[0];
-    m_ImageSpacing[1] = inputImage->GetSpacing()[1];
-    m_ImageSpacing[2] = inputImage->GetSpacing()[2];
+  if (m_StepSizeVox<mitk::eps)
+    m_StepSize = 0.5*minSpacing;
+  else
+    m_StepSize = m_StepSizeVox*minSpacing;
 
-    double minSpacing;
-    if(m_ImageSpacing[0]<m_ImageSpacing[1] && m_ImageSpacing[0]<m_ImageSpacing[2])
-        minSpacing = m_ImageSpacing[0];
-    else if (m_ImageSpacing[1] < m_ImageSpacing[2])
-        minSpacing = m_ImageSpacing[1];
+  if (m_AngularThresholdDeg<0)
+  {
+    if  (m_StepSize/minSpacing<=1.0)
+      m_AngularThreshold = std::cos( 0.5 * M_PI * m_StepSize/minSpacing );
     else
-        minSpacing = m_ImageSpacing[2];
-    if (m_StepSize<0.1*minSpacing)
-        m_StepSize = 0.1*minSpacing;
+      m_AngularThreshold = std::cos( 0.5 * M_PI );
+  }
+  else
+    m_AngularThreshold = std::cos( m_AngularThresholdDeg*M_PI/180.0 );
+  m_TrackingHandler->SetAngularThreshold(m_AngularThreshold);
 
-    if (m_ResampleFibers)
-        m_PointPistance = 0.5*minSpacing;
+  if (m_SamplingDistanceVox<mitk::eps)
+    m_SamplingDistance = minSpacing*0.25;
+  else
+    m_SamplingDistance = m_SamplingDistanceVox * minSpacing;
 
-    m_PolyDataContainer = itk::VectorContainer< int, FiberPolyDataType >::New();
-    for (unsigned int i=0; i<this->GetNumberOfThreads(); i++)
+  m_PolyDataContainer.clear();
+  for (unsigned int i=0; i<this->GetNumberOfThreads(); i++)
+  {
+    PolyDataType poly = PolyDataType::New();
+    m_PolyDataContainer.push_back(poly);
+  }
+
+  if (m_UseOutputProbabilityMap)
+  {
+    m_OutputProbabilityMap = ItkDoubleImgType::New();
+    m_OutputProbabilityMap->SetSpacing(imageSpacing);
+    m_OutputProbabilityMap->SetOrigin(m_TrackingHandler->GetOrigin());
+    m_OutputProbabilityMap->SetDirection(m_TrackingHandler->GetDirection());
+    m_OutputProbabilityMap->SetRegions(m_TrackingHandler->GetLargestPossibleRegion());
+    m_OutputProbabilityMap->Allocate();
+    m_OutputProbabilityMap->FillBuffer(0);
+  }
+
+  m_MaskInterpolator = itk::LinearInterpolateImageFunction< ItkFloatImgType, float >::New();
+  m_StopInterpolator = itk::LinearInterpolateImageFunction< ItkFloatImgType, float >::New();
+  m_SeedInterpolator = itk::LinearInterpolateImageFunction< ItkFloatImgType, float >::New();
+  m_TargetInterpolator = itk::LinearInterpolateImageFunction< ItkFloatImgType, float >::New();
+
+  if (m_StoppingRegions.IsNull())
+  {
+    m_StoppingRegions = ItkFloatImgType::New();
+    m_StoppingRegions->SetSpacing( imageSpacing );
+    m_StoppingRegions->SetOrigin( m_TrackingHandler->GetOrigin() );
+    m_StoppingRegions->SetDirection( m_TrackingHandler->GetDirection() );
+    m_StoppingRegions->SetRegions( m_TrackingHandler->GetLargestPossibleRegion() );
+    m_StoppingRegions->Allocate();
+    m_StoppingRegions->FillBuffer(0);
+  }
+  else
+    std::cout << "StreamlineTracking - Using stopping region image" << std::endl;
+  m_StopInterpolator->SetInputImage(m_StoppingRegions);
+
+  if (m_TargetRegions.IsNull())
+  {
+    m_TargetImageSet = false;
+    m_TargetRegions = ItkFloatImgType::New();
+    m_TargetRegions->SetSpacing( imageSpacing );
+    m_TargetRegions->SetOrigin( m_TrackingHandler->GetOrigin() );
+    m_TargetRegions->SetDirection( m_TrackingHandler->GetDirection() );
+    m_TargetRegions->SetRegions( m_TrackingHandler->GetLargestPossibleRegion() );
+    m_TargetRegions->Allocate();
+    m_TargetRegions->FillBuffer(1);
+  }
+  else
+  {
+    m_TargetImageSet = true;
+    m_TargetInterpolator->SetInputImage(m_TargetRegions);
+    std::cout << "StreamlineTracking - Using target region image" << std::endl;
+  }
+
+  if (m_SeedImage.IsNull())
+  {
+    m_SeedImageSet = false;
+    m_SeedImage = ItkFloatImgType::New();
+    m_SeedImage->SetSpacing( imageSpacing );
+    m_SeedImage->SetOrigin( m_TrackingHandler->GetOrigin() );
+    m_SeedImage->SetDirection( m_TrackingHandler->GetDirection() );
+    m_SeedImage->SetRegions( m_TrackingHandler->GetLargestPossibleRegion() );
+    m_SeedImage->Allocate();
+    m_SeedImage->FillBuffer(1);
+  }
+  else
+  {
+    m_SeedImageSet = true;
+    std::cout << "StreamlineTracking - Using seed image" << std::endl;
+  }
+  m_SeedInterpolator->SetInputImage(m_SeedImage);
+
+  if (m_MaskImage.IsNull())
+  {
+    // initialize mask image
+    m_MaskImage = ItkFloatImgType::New();
+    m_MaskImage->SetSpacing( imageSpacing );
+    m_MaskImage->SetOrigin( m_TrackingHandler->GetOrigin() );
+    m_MaskImage->SetDirection( m_TrackingHandler->GetDirection() );
+    m_MaskImage->SetRegions( m_TrackingHandler->GetLargestPossibleRegion() );
+    m_MaskImage->Allocate();
+    m_MaskImage->FillBuffer(1);
+  }
+  else
+    std::cout << "StreamlineTracking - Using mask image" << std::endl;
+  m_MaskInterpolator->SetInputImage(m_MaskImage);
+
+  if (m_SeedPoints.empty())
+    GetSeedPointsFromSeedImage();
+
+  m_BuildFibersReady = 0;
+  m_BuildFibersFinished = false;
+  m_Tractogram.clear();
+  m_SamplingPointset = mitk::PointSet::New();
+  m_AlternativePointset = mitk::PointSet::New();
+  m_StopVotePointset = mitk::PointSet::New();
+  m_StartTime = std::chrono::system_clock::now();
+
+  if (m_DemoMode)
+    omp_set_num_threads(1);
+
+  if (m_TrackingHandler->GetMode()==mitk::TrackingDataHandler::MODE::DETERMINISTIC)
+    std::cout << "StreamlineTracking - Mode: deterministic" << std::endl;
+  else if(m_TrackingHandler->GetMode()==mitk::TrackingDataHandler::MODE::PROBABILISTIC)
+    std::cout << "StreamlineTracking - Mode: probabilistic" << std::endl;
+  else
+    std::cout << "StreamlineTracking - Mode: ???" << std::endl;
+
+  std::cout << "StreamlineTracking - Angular threshold: " << m_AngularThreshold << " (" << 180*std::acos( m_AngularThreshold )/M_PI << "°)" << std::endl;
+  std::cout << "StreamlineTracking - Stepsize: " << m_StepSize << "mm (" << m_StepSize/minSpacing << "*vox)" << std::endl;
+  std::cout << "StreamlineTracking - Seeds per voxel: " << m_SeedsPerVoxel << std::endl;
+  std::cout << "StreamlineTracking - Max. tract length: " << m_MaxTractLength << "mm" << std::endl;
+  std::cout << "StreamlineTracking - Min. tract length: " << m_MinTractLength << "mm" << std::endl;
+  std::cout << "StreamlineTracking - Max. num. tracts: " << m_MaxNumTracts << std::endl;
+
+  std::cout << "StreamlineTracking - Num. neighborhood samples: " << m_NumberOfSamples << std::endl;
+  std::cout << "StreamlineTracking - Max. sampling distance: " << m_SamplingDistance << "mm (" << m_SamplingDistance/minSpacing << "*vox)" << std::endl;
+  std::cout << "StreamlineTracking - Deflection modifier: " << m_DeflectionMod << std::endl;
+
+  std::cout << "StreamlineTracking - Use stop votes: " << m_UseStopVotes << std::endl;
+  std::cout << "StreamlineTracking - Only frontal samples: " << m_OnlyForwardSamples << std::endl;
+
+  if (m_DemoMode)
+  {
+    std::cout << "StreamlineTracking - Running in demo mode";
+    std::cout << "StreamlineTracking - Starting streamline tracking using 1 thread" << std::endl;
+  }
+  else
+    std::cout << "StreamlineTracking - Starting streamline tracking using " << omp_get_max_threads() << " threads" << std::endl;
+}
+
+void StreamlineTrackingFilter::CalculateNewPosition(itk::Point<float, 3>& pos, vnl_vector_fixed<float, 3>& dir)
+{
+  pos[0] += dir[0]*m_StepSize;
+  pos[1] += dir[1]*m_StepSize;
+  pos[2] += dir[2]*m_StepSize;
+}
+
+std::vector< vnl_vector_fixed<float,3> > StreamlineTrackingFilter::CreateDirections(int NPoints)
+{
+  std::vector< vnl_vector_fixed<float,3> > pointshell;
+
+  if (NPoints<2)
+    return pointshell;
+
+  std::vector< float > theta; theta.resize(NPoints);
+
+  std::vector< float > phi; phi.resize(NPoints);
+
+  float C = sqrt(4*M_PI);
+
+  phi[0] = 0.0;
+  phi[NPoints-1] = 0.0;
+
+  for(int i=0; i<NPoints; i++)
+  {
+    theta[i] = acos(-1.0+2.0*i/(NPoints-1.0)) - M_PI / 2.0;
+    if( i>0 && i<NPoints-1)
     {
-        FiberPolyDataType poly = FiberPolyDataType::New();
-        m_PolyDataContainer->InsertElement(i, poly);
+      phi[i] = (phi[i-1] + C / sqrt(NPoints*(1-(-1.0+2.0*i/(NPoints-1.0))*(-1.0+2.0*i/(NPoints-1.0)))));
+      // % (2*DIST_POINTSHELL_PI);
     }
+  }
 
-    if (m_SeedImage.IsNull())
+
+  for(int i=0; i<NPoints; i++)
+  {
+    vnl_vector_fixed<float,3> d;
+    d[0] = cos(theta[i]) * cos(phi[i]);
+    d[1] = cos(theta[i]) * sin(phi[i]);
+    d[2] = sin(theta[i]);
+    pointshell.push_back(d);
+  }
+
+  return pointshell;
+}
+
+
+vnl_vector_fixed<float,3> StreamlineTrackingFilter::GetNewDirection(itk::Point<float, 3> &pos, std::deque<vnl_vector_fixed<float, 3> >& olddirs, itk::Index<3> &oldIndex)
+{
+  if (m_DemoMode)
+  {
+    m_SamplingPointset->Clear();
+    m_AlternativePointset->Clear();
+    m_StopVotePointset->Clear();
+  }
+  vnl_vector_fixed<float,3> direction; direction.fill(0);
+
+  if (mitk::imv::IsInsideMask<float>(pos, m_InterpolateMask, m_MaskInterpolator) && !mitk::imv::IsInsideMask<float>(pos, m_InterpolateMask, m_StopInterpolator))
+    direction = m_TrackingHandler->ProposeDirection(pos, olddirs, oldIndex); // get direction proposal at current streamline position
+  else
+    return direction;
+
+  vnl_vector_fixed<float,3> olddir = olddirs.back();
+  std::vector< vnl_vector_fixed<float,3> > probeVecs = CreateDirections(m_NumberOfSamples);
+  itk::Point<float, 3> sample_pos;
+  int alternatives = 1;
+  int stop_votes = 0;
+  int possible_stop_votes = 0;
+  for (unsigned int i=0; i<probeVecs.size(); i++)
+  {
+    vnl_vector_fixed<float,3> d;
+    bool is_stop_voter = false;
+    if (m_Random && m_RandomSampling)
     {
-        // initialize mask image
-        m_SeedImage = ItkUcharImgType::New();
-        m_SeedImage->SetSpacing( inputImage->GetSpacing() );
-        m_SeedImage->SetOrigin( inputImage->GetOrigin() );
-        m_SeedImage->SetDirection( inputImage->GetDirection() );
-        m_SeedImage->SetRegions( inputImage->GetLargestPossibleRegion() );
-        m_SeedImage->Allocate();
-        m_SeedImage->FillBuffer(1);
+      d[0] = m_TrackingHandler->GetRandDouble(-0.5, 0.5);
+      d[1] = m_TrackingHandler->GetRandDouble(-0.5, 0.5);
+      d[2] = m_TrackingHandler->GetRandDouble(-0.5, 0.5);
+      d.normalize();
+      d *= m_TrackingHandler->GetRandDouble(0,m_SamplingDistance);
     }
-
-    if (m_MaskImage.IsNull())
-    {
-        // initialize mask image
-        m_MaskImage = ItkUcharImgType::New();
-        m_MaskImage->SetSpacing( inputImage->GetSpacing() );
-        m_MaskImage->SetOrigin( inputImage->GetOrigin() );
-        m_MaskImage->SetDirection( inputImage->GetDirection() );
-        m_MaskImage->SetRegions( inputImage->GetLargestPossibleRegion() );
-        m_MaskImage->Allocate();
-        m_MaskImage->FillBuffer(1);
-    }
-
-    bool useUserFaImage = true;
-    if (m_FaImage.IsNull())
-    {
-        m_FaImage = ItkFloatImgType::New();
-        m_FaImage->SetSpacing( inputImage->GetSpacing() );
-        m_FaImage->SetOrigin( inputImage->GetOrigin() );
-        m_FaImage->SetDirection( inputImage->GetDirection() );
-        m_FaImage->SetRegions( inputImage->GetLargestPossibleRegion() );
-        m_FaImage->Allocate();
-        m_FaImage->FillBuffer(0.0);
-        useUserFaImage = false;
-    }
-
-    m_NumberOfInputs = 0;
-    for (unsigned int i=0; i<this->GetNumberOfIndexedInputs(); i++)
-    {
-        if (this->ProcessObject::GetInput(i)==NULL)
-            break;
-
-        ItkPDImgType::Pointer pdImage = ItkPDImgType::New();
-        pdImage->SetSpacing( inputImage->GetSpacing() );
-        pdImage->SetOrigin( inputImage->GetOrigin() );
-        pdImage->SetDirection( inputImage->GetDirection() );
-        pdImage->SetRegions( inputImage->GetLargestPossibleRegion() );
-        pdImage->Allocate();
-        m_PdImage.push_back(pdImage);
-
-        ItkDoubleImgType::Pointer emaxImage = ItkDoubleImgType::New();
-        emaxImage->SetSpacing( inputImage->GetSpacing() );
-        emaxImage->SetOrigin( inputImage->GetOrigin() );
-        emaxImage->SetDirection( inputImage->GetDirection() );
-        emaxImage->SetRegions( inputImage->GetLargestPossibleRegion() );
-        emaxImage->Allocate();
-        emaxImage->FillBuffer(1.0);
-        m_EmaxImage.push_back(emaxImage);
-
-        typename InputImageType::Pointer inputImage = static_cast< InputImageType * >( this->ProcessObject::GetInput(i) );
-        m_InputImage.push_back(inputImage);
-
-        m_NumberOfInputs++;
-    }
-    MITK_INFO << "Processing " << m_NumberOfInputs << " tensor files";
-
-    typedef itk::DiffusionTensor3D<TTensorPixelType>    TensorType;
-    typename TensorType::EigenValuesArrayType eigenvalues;
-    typename TensorType::EigenVectorsMatrixType eigenvectors;
-
-
-    for (int x=0; x<m_ImageSize[0]; x++)
-        for (int y=0; y<m_ImageSize[1]; y++)
-            for (int z=0; z<m_ImageSize[2]; z++)
-            {
-                typename InputImageType::IndexType index;
-                index[0] = x; index[1] = y; index[2] = z;
-                for (int i=0; i<m_NumberOfInputs; i++)
-                {
-                    typename InputImageType::PixelType tensor = m_InputImage.at(i)->GetPixel(index);
-                    vnl_vector_fixed<double,3> dir;
-                    tensor.ComputeEigenAnalysis(eigenvalues, eigenvectors);
-                    dir[0] = eigenvectors(2, 0);
-                    dir[1] = eigenvectors(2, 1);
-                    dir[2] = eigenvectors(2, 2);
-                    dir.normalize();
-                    m_PdImage.at(i)->SetPixel(index, dir);
-                    if (!useUserFaImage)
-                        m_FaImage->SetPixel(index, m_FaImage->GetPixel(index)+tensor.GetFractionalAnisotropy());
-                    m_EmaxImage.at(i)->SetPixel(index, 2/eigenvalues[2]);
-                }
-                if (!useUserFaImage)
-                    m_FaImage->SetPixel(index, m_FaImage->GetPixel(index)/m_NumberOfInputs);
-            }
-
-    if (m_Interpolate)
-        std::cout << "StreamlineTrackingFilter: using trilinear interpolation" << std::endl;
     else
     {
-        if (m_MinCurvatureRadius<0.0)
-            m_MinCurvatureRadius = 0.1*minSpacing;
-
-        std::cout << "StreamlineTrackingFilter: using nearest neighbor interpolation" << std::endl;
+      d = probeVecs.at(i);
+      float dot = dot_product(d, olddir);
+      if (m_UseStopVotes && dot>0.7)
+      {
+        is_stop_voter = true;
+        possible_stop_votes++;
+      }
+      else if (m_OnlyForwardSamples && dot<0)
+        continue;
+      d *= m_SamplingDistance;
     }
 
-    if (m_MinCurvatureRadius<0.0)
-        m_MinCurvatureRadius = 0.5*minSpacing;
+    sample_pos[0] = pos[0] + d[0];
+    sample_pos[1] = pos[1] + d[1];
+    sample_pos[2] = pos[2] + d[2];
 
-    std::cout << "StreamlineTrackingFilter: Min. curvature radius: " << m_MinCurvatureRadius << std::endl;
-    std::cout << "StreamlineTrackingFilter: FA threshold: " << m_FaThreshold << std::endl;
-    std::cout << "StreamlineTrackingFilter: stepsize: " << m_StepSize << " mm" << std::endl;
-    std::cout << "StreamlineTrackingFilter: f: " << m_F << std::endl;
-    std::cout << "StreamlineTrackingFilter: g: " << m_G << std::endl;
-    std::cout << "StreamlineTrackingFilter: starting streamline tracking using " << this->GetNumberOfThreads() << " threads." << std::endl;
-}
-
-template< class TTensorPixelType, class TPDPixelType>
-void StreamlineTrackingFilter< TTensorPixelType, TPDPixelType>
-::CalculateNewPosition(itk::ContinuousIndex<double, 3>& pos, vnl_vector_fixed<double,3>& dir, typename InputImageType::IndexType& index)
-{
-    vnl_matrix_fixed< double, 3, 3 > rot = m_InputImage.at(0)->GetDirection().GetTranspose();
-    dir = rot*dir;
-    if (true)
+    vnl_vector_fixed<float,3> tempDir; tempDir.fill(0.0);
+    if (mitk::imv::IsInsideMask<float>(sample_pos, m_InterpolateMask, m_MaskInterpolator))
+      tempDir = m_TrackingHandler->ProposeDirection(sample_pos, olddirs, oldIndex); // sample neighborhood
+    if (tempDir.magnitude()>mitk::eps)
     {
-        dir *= m_StepSize;
-        pos[0] += dir[0]/m_ImageSpacing[0];
-        pos[1] += dir[1]/m_ImageSpacing[1];
-        pos[2] += dir[2]/m_ImageSpacing[2];
-        index[0] = RoundToNearest(pos[0]);
-        index[1] = RoundToNearest(pos[1]);
-        index[2] = RoundToNearest(pos[2]);
+      direction += tempDir;
+
+      if(m_DemoMode)
+        m_SamplingPointset->InsertPoint(i, sample_pos);
+    }
+    else if (m_AvoidStop && olddir.magnitude()>0.5) // out of white matter
+    {
+      if (is_stop_voter)
+        stop_votes++;
+      if (m_DemoMode)
+        m_StopVotePointset->InsertPoint(i, sample_pos);
+
+      float dot = dot_product(d, olddir);
+      if (dot >= 0.0) // in front of plane defined by pos and olddir
+        d = -d + 2*dot*olddir; // reflect
+      else
+        d = -d; // invert
+
+      // look a bit further into the other direction
+      sample_pos[0] = pos[0] + d[0];
+      sample_pos[1] = pos[1] + d[1];
+      sample_pos[2] = pos[2] + d[2];
+      alternatives++;
+      vnl_vector_fixed<float,3> tempDir; tempDir.fill(0.0);
+      if (mitk::imv::IsInsideMask<float>(sample_pos, m_InterpolateMask, m_MaskInterpolator))
+        tempDir = m_TrackingHandler->ProposeDirection(sample_pos, olddirs, oldIndex); // sample neighborhood
+
+      if (tempDir.magnitude()>mitk::eps)  // are we back in the white matter?
+      {
+        direction += d * m_DeflectionMod;         // go into the direction of the white matter
+        direction += tempDir;  // go into the direction of the white matter direction at this location
+
+        if(m_DemoMode)
+          m_AlternativePointset->InsertPoint(alternatives, sample_pos);
+      }
+      else
+      {
+        if (m_DemoMode)
+          m_StopVotePointset->InsertPoint(i, sample_pos);
+      }
     }
     else
     {
-        dir[0] /= m_ImageSpacing[0];
-        dir[1] /= m_ImageSpacing[1];
-        dir[2] /= m_ImageSpacing[2];
+      if (m_DemoMode)
+        m_StopVotePointset->InsertPoint(i, sample_pos);
 
-        int smallest = 0;
-        double x = 100000;
-        if (dir[0]>0)
-        {
-            if (fabs(fabs(RoundToNearest(pos[0])-pos[0])-0.5)>mitk::eps)
-                x = fabs(pos[0]-RoundToNearest(pos[0])-0.5)/dir[0];
-            else
-                x = fabs(pos[0]-std::ceil(pos[0])-0.5)/dir[0];
-        }
-        else if (dir[0]<0)
-        {
-            if (fabs(fabs(RoundToNearest(pos[0])-pos[0])-0.5)>mitk::eps)
-                x = -fabs(pos[0]-RoundToNearest(pos[0])+0.5)/dir[0];
-            else
-                x = -fabs(pos[0]-std::floor(pos[0])+0.5)/dir[0];
-        }
-        double s = x;
-
-        double y = 100000;
-        if (dir[1]>0)
-        {
-            if (fabs(fabs(RoundToNearest(pos[1])-pos[1])-0.5)>mitk::eps)
-                y = fabs(pos[1]-RoundToNearest(pos[1])-0.5)/dir[1];
-            else
-                y = fabs(pos[1]-std::ceil(pos[1])-0.5)/dir[1];
-        }
-        else if (dir[1]<0)
-        {
-            if (fabs(fabs(RoundToNearest(pos[1])-pos[1])-0.5)>mitk::eps)
-                y = -fabs(pos[1]-RoundToNearest(pos[1])+0.5)/dir[1];
-            else
-                y = -fabs(pos[1]-std::floor(pos[1])+0.5)/dir[1];
-        }
-        if (s>y)
-        {
-            s=y;
-            smallest = 1;
-        }
-
-        double z = 100000;
-        if (dir[2]>0)
-        {
-            if (fabs(fabs(RoundToNearest(pos[2])-pos[2])-0.5)>mitk::eps)
-                z = fabs(pos[2]-RoundToNearest(pos[2])-0.5)/dir[2];
-            else
-                z = fabs(pos[2]-std::ceil(pos[2])-0.5)/dir[2];
-        }
-        else if (dir[2]<0)
-        {
-            if (fabs(fabs(RoundToNearest(pos[2])-pos[2])-0.5)>mitk::eps)
-                z = -fabs(pos[2]-RoundToNearest(pos[2])+0.5)/dir[2];
-            else
-                z = -fabs(pos[2]-std::floor(pos[2])+0.5)/dir[2];
-        }
-        if (s>z)
-        {
-            s=z;
-            smallest = 2;
-        }
-
-        //        MITK_INFO << "---------------------------------------------";
-        //        MITK_INFO << "s: " << s;
-        //        MITK_INFO << "dir: " << dir;
-        //        MITK_INFO << "old: " << pos[0] << ", " << pos[1] << ", " << pos[2];
-
-        pos[0] += dir[0]*s;
-        pos[1] += dir[1]*s;
-        pos[2] += dir[2]*s;
-
-        switch (smallest)
-        {
-        case 0:
-            if (dir[0]<0)
-                index[0] = std::floor(pos[0]);
-            else
-                index[0] = std::ceil(pos[0]);
-            index[1] = RoundToNearest(pos[1]);
-            index[2] = RoundToNearest(pos[2]);
-            break;
-
-        case 1:
-            if (dir[1]<0)
-                index[1] = std::floor(pos[1]);
-            else
-                index[1] = std::ceil(pos[1]);
-            index[0] = RoundToNearest(pos[0]);
-            index[2] = RoundToNearest(pos[2]);
-            break;
-
-        case 2:
-            if (dir[2]<0)
-                index[2] = std::floor(pos[2]);
-            else
-                index[2] = std::ceil(pos[2]);
-            index[1] = RoundToNearest(pos[1]);
-            index[0] = RoundToNearest(pos[0]);
-        }
-
-        //        double x = 100000;
-        //        if (dir[0]>0)
-        //            x = fabs(pos[0]-RoundToNearest(pos[0])-0.5)/dir[0];
-        //        else if (dir[0]<0)
-        //            x = -fabs(pos[0]-RoundToNearest(pos[0])+0.5)/dir[0];
-        //        double s = x;
-
-        //        double y = 100000;
-        //        if (dir[1]>0)
-        //            y = fabs(pos[1]-RoundToNearest(pos[1])-0.5)/dir[1];
-        //        else if (dir[1]<0)
-        //            y = -fabs(pos[1]-RoundToNearest(pos[1])+0.5)/dir[1];
-        //        if (s>y)
-        //            s=y;
-
-        //        double z = 100000;
-        //        if (dir[2]>0)
-        //            z = fabs(pos[2]-RoundToNearest(pos[2])-0.5)/dir[2];
-        //        else if (dir[2]<0)
-        //            z = -fabs(pos[2]-RoundToNearest(pos[2])+0.5)/dir[2];
-
-        //        if (s>z)
-        //            s=z;
-        //        s *= 1.001;
-
-        //        pos[0] += dir[0]*s;
-        //        pos[1] += dir[1]*s;
-        //        pos[2] += dir[2]*s;
-
-        //        index[0] = RoundToNearest(pos[0]);
-        //        index[1] = RoundToNearest(pos[1]);
-        //        index[2] = RoundToNearest(pos[2]);
-
-        //        MITK_INFO << "new: " << pos[0] << ", " << pos[1] << ", " << pos[2];
+      if (is_stop_voter)
+        stop_votes++;
     }
+  }
+
+  if (direction.magnitude()>0.001 && (possible_stop_votes==0 || (float)stop_votes/possible_stop_votes<0.5) )
+    direction.normalize();
+  else
+    direction.fill(0);
+
+  return direction;
 }
 
-template< class TTensorPixelType, class TPDPixelType>
-bool StreamlineTrackingFilter< TTensorPixelType, TPDPixelType>
-::IsValidPosition(itk::ContinuousIndex<double, 3>& pos, typename InputImageType::IndexType &index, vnl_vector_fixed< double, 8 >& interpWeights, int imageIdx)
-{
-    if (!m_InputImage.at(imageIdx)->GetLargestPossibleRegion().IsInside(index) || m_MaskImage->GetPixel(index)==0)
-        return false;
 
-    if (m_Interpolate)
+float StreamlineTrackingFilter::FollowStreamline(itk::Point<float, 3> pos, vnl_vector_fixed<float,3> dir, FiberType* fib, float tractLength, bool front)
+{
+  vnl_vector_fixed<float,3> zero_dir; zero_dir.fill(0.0);
+  std::deque< vnl_vector_fixed<float,3> > last_dirs;
+  for (unsigned int i=0; i<m_NumPreviousDirections-1; i++)
+    last_dirs.push_back(zero_dir);
+
+  for (int step=0; step< m_MaxLength/2; step++)
+  {
+    itk::Index<3> oldIndex;
+    m_TrackingHandler->WorldToIndex(pos, oldIndex);
+
+    // get new position
+    CalculateNewPosition(pos, dir);
+
+    // is new position inside of image and mask
+    if (m_AbortTracking)   // if not end streamline
     {
-        double frac_x = pos[0] - index[0];
-        double frac_y = pos[1] - index[1];
-        double frac_z = pos[2] - index[2];
-
-        if (frac_x<0)
-        {
-            index[0] -= 1;
-            frac_x += 1;
-        }
-        if (frac_y<0)
-        {
-            index[1] -= 1;
-            frac_y += 1;
-        }
-        if (frac_z<0)
-        {
-            index[2] -= 1;
-            frac_z += 1;
-        }
-
-        frac_x = 1-frac_x;
-        frac_y = 1-frac_y;
-        frac_z = 1-frac_z;
-
-        // int coordinates inside image?
-        if (index[0] < 0 || index[0] >= m_ImageSize[0]-1)
-            return false;
-        if (index[1] < 0 || index[1] >= m_ImageSize[1]-1)
-            return false;
-        if (index[2] < 0 || index[2] >= m_ImageSize[2]-1)
-            return false;
-
-        interpWeights[0] = (  frac_x)*(  frac_y)*(  frac_z);
-        interpWeights[1] = (1-frac_x)*(  frac_y)*(  frac_z);
-        interpWeights[2] = (  frac_x)*(1-frac_y)*(  frac_z);
-        interpWeights[3] = (  frac_x)*(  frac_y)*(1-frac_z);
-        interpWeights[4] = (1-frac_x)*(1-frac_y)*(  frac_z);
-        interpWeights[5] = (  frac_x)*(1-frac_y)*(1-frac_z);
-        interpWeights[6] = (1-frac_x)*(  frac_y)*(1-frac_z);
-        interpWeights[7] = (1-frac_x)*(1-frac_y)*(1-frac_z);
-
-        typename InputImageType::IndexType tmpIdx;
-        double FA = m_FaImage->GetPixel(index) * interpWeights[0];
-        tmpIdx = index; tmpIdx[0]++;
-        FA +=  m_FaImage->GetPixel(tmpIdx) * interpWeights[1];
-        tmpIdx = index; tmpIdx[1]++;
-        FA +=  m_FaImage->GetPixel(tmpIdx) * interpWeights[2];
-        tmpIdx = index; tmpIdx[2]++;
-        FA +=  m_FaImage->GetPixel(tmpIdx) * interpWeights[3];
-        tmpIdx = index; tmpIdx[0]++; tmpIdx[1]++;
-        FA +=  m_FaImage->GetPixel(tmpIdx) * interpWeights[4];
-        tmpIdx = index; tmpIdx[1]++; tmpIdx[2]++;
-        FA +=  m_FaImage->GetPixel(tmpIdx) * interpWeights[5];
-        tmpIdx = index; tmpIdx[2]++; tmpIdx[0]++;
-        FA +=  m_FaImage->GetPixel(tmpIdx) * interpWeights[6];
-        tmpIdx = index; tmpIdx[0]++; tmpIdx[1]++; tmpIdx[2]++;
-        FA +=  m_FaImage->GetPixel(tmpIdx) * interpWeights[7];
-
-        if (FA<m_FaThreshold)
-            return false;
+      return tractLength;
     }
-    else if (m_FaImage->GetPixel(index)<m_FaThreshold)
-        return false;
+    else    // if yes, add new point to streamline
+    {
+      tractLength +=  m_StepSize;
+      if (front)
+        fib->push_front(pos);
+      else
+        fib->push_back(pos);
 
-    return true;
-}
+      if (m_AposterioriCurvCheck)
+      {
+        int curv = CheckCurvature(fib, front);
+        if (curv>0)
+        {
+          tractLength -= m_StepSize*curv;
+          while (curv>0)
+          {
+            if (front)
+              fib->pop_front();
+            else
+              fib->pop_back();
+            curv--;
+          }
+          return tractLength;
+        }
+      }
 
-template< class TTensorPixelType, class TPDPixelType>
-double StreamlineTrackingFilter< TTensorPixelType, TPDPixelType>
-::FollowStreamline(itk::ContinuousIndex<double, 3> pos, int dirSign, vtkPoints* points, std::vector< vtkIdType >& ids, int imageIdx)
-{
-    double tractLength = 0;
-    typedef itk::DiffusionTensor3D<TTensorPixelType>    TensorType;
-    typename TensorType::EigenValuesArrayType eigenvalues;
-    typename TensorType::EigenVectorsMatrixType eigenvectors;
-    vnl_vector_fixed< double, 8 > interpWeights;
-
-    typename InputImageType::IndexType index, indexOld;
-    indexOld[0] = -1; indexOld[1] = -1; indexOld[2] = -1;
-    itk::Point<double> worldPos;
-    double distance = 0;
-    double distanceInVoxel = 0;
-
-    // starting index and direction
-    index[0] = RoundToNearest(pos[0]);
-    index[1] = RoundToNearest(pos[1]);
-    index[2] = RoundToNearest(pos[2]);
-
-    vnl_vector_fixed<double,3> dir = m_PdImage.at(imageIdx)->GetPixel(index);
-    dir *= dirSign;                     // reverse direction
-    vnl_vector_fixed<double,3> dirOld = dir;
-    if (dir.magnitude()<mitk::eps)
+      if (tractLength>m_MaxTractLength)
         return tractLength;
+    }
 
-    for (int step=0; step< m_MaxLength/2; step++)
+    if (m_DemoMode && !m_UseOutputProbabilityMap) // CHECK: warum sind die samplingpunkte der streamline in der visualisierung immer einen schritt voras?
     {
-        // get new position
-        CalculateNewPosition(pos, dir, index);
-        distance += m_StepSize;
+#pragma omp critical
+      {
+        m_BuildFibersReady++;
+        m_Tractogram.push_back(*fib);
+        BuildFibers(true);
+        m_Stop = true;
 
-        // is new position valid (inside image, above FA threshold etc.)
-        if (!IsValidPosition(pos, index, interpWeights, imageIdx))   // if not end streamline
-        {
-//            m_SeedImage->TransformContinuousIndexToPhysicalPoint( pos, worldPos );
-//            ids.push_back(points->InsertNextPoint(worldPos.GetDataPointer()));
-            return tractLength;
+        while (m_Stop){
         }
-        else if (distance>=m_PointPistance)
+      }
+    }
+
+    dir.normalize();
+    last_dirs.push_back(dir);
+    if (last_dirs.size()>m_NumPreviousDirections)
+      last_dirs.pop_front();
+    dir = GetNewDirection(pos, last_dirs, oldIndex);
+
+    while (m_PauseTracking){}
+
+    if (dir.magnitude()<0.0001)
+      return tractLength;
+  }
+  return tractLength;
+}
+
+
+int StreamlineTrackingFilter::CheckCurvature(FiberType* fib, bool front)
+{
+  float m_Distance = 5;
+  if (fib->size()<3)
+    return 0;
+
+  float dist = 0;
+  std::vector< vnl_vector_fixed< float, 3 > > vectors;
+  vnl_vector_fixed< float, 3 > meanV; meanV.fill(0);
+  float dev = 0;
+
+  if (front)
+  {
+    int c=0;
+    while(dist<m_Distance && c<(int)fib->size()-1)
+    {
+      itk::Point<float> p1 = fib->at(c);
+      itk::Point<float> p2 = fib->at(c+1);
+
+      vnl_vector_fixed< float, 3 > v;
+      v[0] = p2[0]-p1[0];
+      v[1] = p2[1]-p1[1];
+      v[2] = p2[2]-p1[2];
+      dist += v.magnitude();
+      v.normalize();
+      vectors.push_back(v);
+      if (c==0)
+        meanV += v;
+      c++;
+    }
+  }
+  else
+  {
+    int c=fib->size()-1;
+    while(dist<m_Distance && c>0)
+    {
+      itk::Point<float> p1 = fib->at(c);
+      itk::Point<float> p2 = fib->at(c-1);
+
+      vnl_vector_fixed< float, 3 > v;
+      v[0] = p2[0]-p1[0];
+      v[1] = p2[1]-p1[1];
+      v[2] = p2[2]-p1[2];
+      dist += v.magnitude();
+      v.normalize();
+      vectors.push_back(v);
+      if (c==(int)fib->size()-1)
+        meanV += v;
+      c--;
+    }
+  }
+  meanV.normalize();
+
+  for (unsigned int c=0; c<vectors.size(); c++)
+  {
+    float angle = dot_product(meanV, vectors.at(c));
+    if (angle>1.0)
+      angle = 1.0;
+    if (angle<-1.0)
+      angle = -1.0;
+    dev += acos(angle)*180/M_PI;
+  }
+  if (vectors.size()>0)
+    dev /= vectors.size();
+
+  if (dev<30)
+    return 0;
+  else
+    return vectors.size();
+}
+
+void StreamlineTrackingFilter::GetSeedPointsFromSeedImage()
+{
+  MITK_INFO << "StreamlineTracking - Calculating seed points.";
+  m_SeedPoints.clear();
+
+  typedef ImageRegionConstIterator< ItkFloatImgType >     MaskIteratorType;
+  MaskIteratorType    sit(m_SeedImage, m_SeedImage->GetLargestPossibleRegion());
+  sit.GoToBegin();
+
+  while (!sit.IsAtEnd())
+  {
+    if (sit.Value()>0)
+    {
+      ItkFloatImgType::IndexType index = sit.GetIndex();
+      itk::ContinuousIndex<float, 3> start;
+      start[0] = index[0];
+      start[1] = index[1];
+      start[2] = index[2];
+      itk::Point<float> worldPos;
+      m_SeedImage->TransformContinuousIndexToPhysicalPoint(start, worldPos);
+
+      if ( mitk::imv::IsInsideMask<float>(worldPos, m_InterpolateMask, m_MaskInterpolator) )
+      {
+        m_SeedPoints.push_back(worldPos);
+        for (int s = 1; s < m_SeedsPerVoxel; s++)
         {
-            tractLength +=  m_StepSize;
-            distanceInVoxel += m_StepSize;
-            m_SeedImage->TransformContinuousIndexToPhysicalPoint( pos, worldPos );
-            ids.push_back(points->InsertNextPoint(worldPos.GetDataPointer()));
-            distance = 0;
+          start[0] = index[0] + m_TrackingHandler->GetRandDouble(-0.5, 0.5);
+          start[1] = index[1] + m_TrackingHandler->GetRandDouble(-0.5, 0.5);
+          start[2] = index[2] + m_TrackingHandler->GetRandDouble(-0.5, 0.5);
+
+          itk::Point<float> worldPos;
+          m_SeedImage->TransformContinuousIndexToPhysicalPoint(start, worldPos);
+          m_SeedPoints.push_back(worldPos);
         }
+      }
+    }
+    ++sit;
+  }
+}
 
-        if (!m_Interpolate)                         // use nearest neighbour interpolation
+void StreamlineTrackingFilter::GenerateData()
+{
+  this->BeforeTracking();
+  if (m_Random)
+    std::random_shuffle(m_SeedPoints.begin(), m_SeedPoints.end());
+
+  m_CurrentTracts = 0;
+  int num_seeds = m_SeedPoints.size();
+  itk::Index<3> zeroIndex; zeroIndex.Fill(0);
+  m_Progress = 0;
+  int i = 0;
+  int print_interval = num_seeds/100;
+  if (print_interval<100)
+    m_Verbose=false;
+
+#pragma omp parallel
+  while (i<num_seeds && !m_StopTracking)
+  {
+
+
+    int temp_i = 0;
+#pragma omp critical
+    {
+      temp_i = i;
+      i++;
+    }
+
+    if (temp_i>=num_seeds || m_StopTracking)
+      continue;
+    else if (m_Verbose && i%print_interval==0)
+#pragma omp critical
+    {
+      m_Progress += print_interval;
+      std::cout << "                                                                                                     \r";
+      if (m_MaxNumTracts>0)
+        std::cout << "Tried: " << m_Progress << "/" << num_seeds << " | Accepted: " << m_CurrentTracts << "/" << m_MaxNumTracts << '\r';
+      else
+        std::cout << "Tried: " << m_Progress << "/" << num_seeds << " | Accepted: " << m_CurrentTracts << '\r';
+      cout.flush();
+    }
+
+    const itk::Point<float> worldPos = m_SeedPoints.at(temp_i);
+    FiberType fib;
+    float tractLength = 0;
+    unsigned int counter = 0;
+
+    // get starting direction
+    vnl_vector_fixed<float,3> dir; dir.fill(0.0);
+    std::deque< vnl_vector_fixed<float,3> > olddirs;
+    while (olddirs.size()<m_NumPreviousDirections)
+      olddirs.push_back(dir); // start without old directions (only zero directions)
+
+    /// START DIR
+    //    vnl_vector_fixed< float, 3 > gm_start_dir;
+    //    if (m_ControlGmEndings)
+    //    {
+    //      gm_start_dir[0] = m_GmStubs[temp_i][1][0] - m_GmStubs[temp_i][0][0];
+    //      gm_start_dir[1] = m_GmStubs[temp_i][1][1] - m_GmStubs[temp_i][0][1];
+    //      gm_start_dir[2] = m_GmStubs[temp_i][1][2] - m_GmStubs[temp_i][0][2];
+    //      gm_start_dir.normalize();
+    //      olddirs.pop_back();
+    //      olddirs.push_back(gm_start_dir);
+    //    }
+
+    if (mitk::imv::IsInsideMask<float>(worldPos, m_InterpolateMask, m_MaskInterpolator))
+      dir = m_TrackingHandler->ProposeDirection(worldPos, olddirs, zeroIndex);
+
+    if (dir.magnitude()>0.0001)
+    {
+      /// START DIR
+      //      if (m_ControlGmEndings)
+      //      {
+      //        float a = dot_product(gm_start_dir, dir);
+      //        if (a<0)
+      //          dir = -dir;
+      //      }
+
+      // forward tracking
+      tractLength = FollowStreamline(worldPos, dir, &fib, 0, false);
+      fib.push_front(worldPos);
+
+      // backward tracking (only if we don't explicitely start in the GM)
+      tractLength = FollowStreamline(worldPos, -dir, &fib, tractLength, true);
+
+      counter = fib.size();
+
+      if (tractLength>=m_MinTractLength && counter>=2)
+      {
+#pragma omp critical
+        if ( IsValidFiber(&fib) )
         {
-            if (indexOld!=index)                    // did we enter a new voxel? if yes, calculate new direction
-            {
-                double minAngle = 0;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    vnl_vector_fixed<double,3> newDir = m_PdImage.at(img)->GetPixel(index);   // get principal direction
-                    if (newDir.magnitude()<mitk::eps)
-                        continue;
-
-                    typename InputImageType::PixelType tensor = m_InputImage.at(img)->GetPixel(index);
-                    double scale = m_EmaxImage.at(img)->GetPixel(index);
-                    newDir[0] = m_F*newDir[0] + (1-m_F)*( (1-m_G)*dirOld[0] + scale*m_G*(tensor[0]*dirOld[0] + tensor[1]*dirOld[1] + tensor[2]*dirOld[2]));
-                    newDir[1] = m_F*newDir[1] + (1-m_F)*( (1-m_G)*dirOld[1] + scale*m_G*(tensor[1]*dirOld[0] + tensor[3]*dirOld[1] + tensor[4]*dirOld[2]));
-                    newDir[2] = m_F*newDir[2] + (1-m_F)*( (1-m_G)*dirOld[2] + scale*m_G*(tensor[2]*dirOld[0] + tensor[4]*dirOld[1] + tensor[5]*dirOld[2]));
-                    newDir.normalize();
-
-                    double angle = dot_product(dirOld, newDir);
-                    if (angle<0)
-                    {
-                        newDir *= -1;
-                        angle *= -1;
-                    }
-
-                    if (angle>minAngle)
-                    {
-                        minAngle = angle;
-                        dir = newDir;
-                    }
-                }
-
-                //double r = m_StepSize/(2*std::asin(std::acos(minAngle)/2));
-                vnl_vector_fixed<double,3> v3 = dir+dirOld; v3 *= m_StepSize;
-                double a = m_StepSize;
-                double b = m_StepSize;
-                double c = v3.magnitude();
-                double r = a*b*c/std::sqrt((a+b+c)*(a+b-c)*(b+c-a)*(a-b+c)); // radius of triangle via Heron's formula (area of triangle)
-
-                if (r<m_MinCurvatureRadius)
-                {
-                    return tractLength;
-                }
-                dirOld = dir;
-                indexOld = index;
-                distanceInVoxel = 0;
-            }
+          if (!m_StopTracking)
+          {
+            if (!m_UseOutputProbabilityMap)
+              m_Tractogram.push_back(fib);
             else
-                dir = dirOld;
+              FiberToProbmap(&fib);
+            m_CurrentTracts++;
+          }
+          if (m_MaxNumTracts > 0 && m_CurrentTracts>=static_cast<unsigned int>(m_MaxNumTracts))
+          {
+            if (!m_StopTracking)
+            {
+              std::cout << "                                                                                                     \r";
+              MITK_INFO << "Reconstructed maximum number of tracts (" << m_CurrentTracts << "). Stopping tractography.";
+            }
+            m_StopTracking = true;
+          }
         }
-        else // use trilinear interpolation (weights calculated in IsValidPosition())
-        {
-            typename InputImageType::PixelType tensor;
+      }
 
-            typename InputImageType::IndexType tmpIdx = index;
-            typename InputImageType::PixelType tmpTensor;
-
-            if (m_NumberOfInputs>1)
-            {
-                double minAngle = 0;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor = tmpTensor * interpWeights[0];
-
-                minAngle = 0;
-                tmpIdx = index; tmpIdx[0]++;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor += tmpTensor * interpWeights[1];
-
-                minAngle = 0;
-                tmpIdx = index; tmpIdx[1]++;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor += tmpTensor * interpWeights[2];
-
-                minAngle = 0;
-                tmpIdx = index; tmpIdx[2]++;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor += tmpTensor * interpWeights[3];
-
-                minAngle = 0;
-                tmpIdx = index; tmpIdx[0]++; tmpIdx[1]++;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor += tmpTensor * interpWeights[4];
-
-                minAngle = 0;
-                tmpIdx = index; tmpIdx[1]++; tmpIdx[2]++;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor += tmpTensor * interpWeights[5];
-
-                minAngle = 0;
-                tmpIdx = index; tmpIdx[2]++; tmpIdx[0]++;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor += tmpTensor * interpWeights[6];
-
-                minAngle = 0;
-                tmpIdx = index; tmpIdx[0]++; tmpIdx[1]++; tmpIdx[2]++;
-                for (int img=0; img<m_NumberOfInputs; img++)
-                {
-                    double angle = dot_product(dirOld, m_PdImage.at(img)->GetPixel(tmpIdx));
-                    if (fabs(angle)>minAngle)
-                    {
-                        minAngle = angle;
-                        tmpTensor = m_InputImage.at(img)->GetPixel(tmpIdx);
-                    }
-                }
-                tensor += tmpTensor * interpWeights[7];
-            }
-            else
-            {
-                tensor = m_InputImage.at(0)->GetPixel(index) * interpWeights[0];
-                typename InputImageType::IndexType tmpIdx = index; tmpIdx[0]++;
-                tensor +=  m_InputImage.at(0)->GetPixel(tmpIdx) * interpWeights[1];
-                tmpIdx = index; tmpIdx[1]++;
-                tensor +=  m_InputImage.at(0)->GetPixel(tmpIdx) * interpWeights[2];
-                tmpIdx = index; tmpIdx[2]++;
-                tensor +=  m_InputImage.at(0)->GetPixel(tmpIdx) * interpWeights[3];
-                tmpIdx = index; tmpIdx[0]++; tmpIdx[1]++;
-                tensor +=  m_InputImage.at(0)->GetPixel(tmpIdx) * interpWeights[4];
-                tmpIdx = index; tmpIdx[1]++; tmpIdx[2]++;
-                tensor +=  m_InputImage.at(0)->GetPixel(tmpIdx) * interpWeights[5];
-                tmpIdx = index; tmpIdx[2]++; tmpIdx[0]++;
-                tensor +=  m_InputImage.at(0)->GetPixel(tmpIdx) * interpWeights[6];
-                tmpIdx = index; tmpIdx[0]++; tmpIdx[1]++; tmpIdx[2]++;
-                tensor +=  m_InputImage.at(0)->GetPixel(tmpIdx) * interpWeights[7];
-            }
-
-            tensor.ComputeEigenAnalysis(eigenvalues, eigenvectors);
-            dir[0] = eigenvectors(2, 0);
-            dir[1] = eigenvectors(2, 1);
-            dir[2] = eigenvectors(2, 2);
-            if (dir.magnitude()<mitk::eps)
-                continue;
-            dir.normalize();
-
-            double scale = 2/eigenvalues[2];
-            dir[0] = m_F*dir[0] + (1-m_F)*( (1-m_G)*dirOld[0] + scale*m_G*(tensor[0]*dirOld[0] + tensor[1]*dirOld[1] + tensor[2]*dirOld[2]));
-            dir[1] = m_F*dir[1] + (1-m_F)*( (1-m_G)*dirOld[1] + scale*m_G*(tensor[1]*dirOld[0] + tensor[3]*dirOld[1] + tensor[4]*dirOld[2]));
-            dir[2] = m_F*dir[2] + (1-m_F)*( (1-m_G)*dirOld[2] + scale*m_G*(tensor[2]*dirOld[0] + tensor[4]*dirOld[1] + tensor[5]*dirOld[2]));
-            dir.normalize();
-
-            double angle = dot_product(dirOld, dir);
-            if (angle<0)
-            {
-                dir *= -1;
-                angle *= -1;
-            }
-
-            vnl_vector_fixed<double,3> v3 = dir+dirOld; v3 *= m_StepSize;
-            double a = m_StepSize;
-            double b = m_StepSize;
-            double c = v3.magnitude();
-            double r = a*b*c/std::sqrt((a+b+c)*(a+b-c)*(b+c-a)*(a-b+c)); // radius of triangle via Heron's formula (area of triangle)
-
-            if (r<m_MinCurvatureRadius)
-                return tractLength;
-
-            dirOld = dir;
-            indexOld = index;
-        }
     }
-    return tractLength;
+  }
+
+  this->AfterTracking();
 }
 
-template< class TTensorPixelType,
-          class TPDPixelType>
-void StreamlineTrackingFilter< TTensorPixelType,
-TPDPixelType>
-::ThreadedGenerateData(const OutputImageRegionType& outputRegionForThread,
-                       ThreadIdType threadId)
+bool StreamlineTrackingFilter::IsValidFiber(FiberType* fib)
 {
-    FiberPolyDataType poly = m_PolyDataContainer->GetElement(threadId);
-    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
-    vtkSmartPointer<vtkCellArray> Cells = vtkSmartPointer<vtkCellArray>::New();
+  if (m_TargetImageSet && m_SeedImageSet)
+  {
+    if ( mitk::imv::IsInsideMask<float>(fib->front(), m_InterpolateMask, m_SeedInterpolator)
+         && mitk::imv::IsInsideMask<float>(fib->back(), m_InterpolateMask, m_TargetInterpolator) )
+      return true;
+    if ( mitk::imv::IsInsideMask<float>(fib->back(), m_InterpolateMask, m_SeedInterpolator)
+         && mitk::imv::IsInsideMask<float>(fib->front(), m_InterpolateMask, m_TargetInterpolator) )
+      return true;
+    return false;
+  }
+  else if (m_TargetImageSet)
+  {
+    if ( mitk::imv::IsInsideMask<float>(fib->front(), m_InterpolateMask, m_TargetInterpolator)
+         && mitk::imv::IsInsideMask<float>(fib->back(), m_InterpolateMask, m_TargetInterpolator) )
+      return true;
+    return false;
+  }
+  return true;
+}
 
-    typedef itk::DiffusionTensor3D<TTensorPixelType>        TensorType;
-    typedef ImageRegionConstIterator< InputImageType >      InputIteratorType;
-    typedef ImageRegionConstIterator< ItkUcharImgType >     MaskIteratorType;
-    typedef ImageRegionConstIterator< ItkFloatImgType >     doubleIteratorType;
-    typedef typename InputImageType::PixelType              InputTensorType;
+void StreamlineTrackingFilter::FiberToProbmap(FiberType* fib)
+{
+  ItkDoubleImgType::IndexType last_idx; last_idx.Fill(0);
+  for (auto p : *fib)
+  {
+    ItkDoubleImgType::IndexType idx;
+    m_OutputProbabilityMap->TransformPhysicalPointToIndex(p, idx);
 
-    MaskIteratorType    sit(m_SeedImage, outputRegionForThread );
-    doubleIteratorType   fit(m_FaImage, outputRegionForThread );
-    MaskIteratorType    mit(m_MaskImage, outputRegionForThread );
-
-    for (int img=0; img<m_NumberOfInputs; img++)
+    if (idx != last_idx)
     {
-        sit.GoToBegin();
-        mit.GoToBegin();
-        fit.GoToBegin();
-        itk::Point<double> worldPos;
-        while( !sit.IsAtEnd() )
-        {
-            if (sit.Value()==0 || fit.Value()<m_FaThreshold || mit.Value()==0)
-            {
-                ++sit;
-                ++mit;
-                ++fit;
-                continue;
-            }
-
-            for (int s=0; s<m_SeedsPerVoxel; s++)
-            {
-                vtkSmartPointer<vtkPolyLine> line = vtkSmartPointer<vtkPolyLine>::New();
-                std::vector< vtkIdType > pointIDs;
-                typename InputImageType::IndexType index = sit.GetIndex();
-                itk::ContinuousIndex<double, 3> start;
-                unsigned int counter = 0;
-
-                if (m_SeedsPerVoxel>1)
-                {
-                    start[0] = index[0]+(double)(rand()%99-49)/100;
-                    start[1] = index[1]+(double)(rand()%99-49)/100;
-                    start[2] = index[2]+(double)(rand()%99-49)/100;
-                }
-                else
-                {
-                    start[0] = index[0];
-                    start[1] = index[1];
-                    start[2] = index[2];
-                }
-
-                // forward tracking
-                double tractLength = FollowStreamline(start, 1, points, pointIDs, img);
-
-                // add ids to line
-                counter += pointIDs.size();
-                while (!pointIDs.empty())
-                {
-                    line->GetPointIds()->InsertNextId(pointIDs.back());
-                    pointIDs.pop_back();
-                }
-
-                // insert start point
-                m_SeedImage->TransformContinuousIndexToPhysicalPoint( start, worldPos );
-                line->GetPointIds()->InsertNextId(points->InsertNextPoint(worldPos.GetDataPointer()));
-
-                // backward tracking
-                tractLength += FollowStreamline(start, -1, points, pointIDs, img);
-
-                counter += pointIDs.size();
-
-                //MITK_INFO << "Tract length " << tractLength;
-
-                if (tractLength<m_MinTractLength || counter<2)
-                    continue;
-
-                // add ids to line
-                for (unsigned int i=0; i<pointIDs.size(); i++)
-                    line->GetPointIds()->InsertNextId(pointIDs.at(i));
-
-                Cells->InsertNextCell(line);
-            }
-            ++sit;
-            ++mit;
-            ++fit;
-        }
+      if (m_OutputProbabilityMap->GetLargestPossibleRegion().IsInside(idx))
+        m_OutputProbabilityMap->SetPixel(idx, m_OutputProbabilityMap->GetPixel(idx)+1);
+      last_idx = idx;
     }
-    poly->SetPoints(points);
-    poly->SetLines(Cells);
-
-    std::cout << "Thread " << threadId << " finished tracking" << std::endl;
+  }
 }
 
-template< class TTensorPixelType,
-          class TPDPixelType>
-vtkSmartPointer< vtkPolyData > StreamlineTrackingFilter< TTensorPixelType,
-TPDPixelType>
-::AddPolyData(FiberPolyDataType poly1, FiberPolyDataType poly2)
+void StreamlineTrackingFilter::BuildFibers(bool check)
 {
-    vtkSmartPointer<vtkPolyData> vNewPolyData = vtkSmartPointer<vtkPolyData>::New();
-    vtkSmartPointer<vtkCellArray> vNewLines = poly1->GetLines();
-    vtkSmartPointer<vtkPoints> vNewPoints = poly1->GetPoints();
+  if (m_BuildFibersReady<omp_get_num_threads() && check)
+    return;
 
-    for( int i=0; i<poly2->GetNumberOfLines(); i++ )
+  m_FiberPolyData = vtkSmartPointer<vtkPolyData>::New();
+  vtkSmartPointer<vtkCellArray> vNewLines = vtkSmartPointer<vtkCellArray>::New();
+  vtkSmartPointer<vtkPoints> vNewPoints = vtkSmartPointer<vtkPoints>::New();
+
+  for (unsigned int i=0; i<m_Tractogram.size(); i++)
+  {
+    vtkSmartPointer<vtkPolyLine> container = vtkSmartPointer<vtkPolyLine>::New();
+    FiberType fib = m_Tractogram.at(i);
+    for (FiberType::iterator it = fib.begin(); it!=fib.end(); ++it)
     {
-        vtkCell* cell = poly2->GetCell(i);
-        int numPoints = cell->GetNumberOfPoints();
-        vtkPoints* points = cell->GetPoints();
-
-        vtkSmartPointer<vtkPolyLine> container = vtkSmartPointer<vtkPolyLine>::New();
-        for (int j=0; j<numPoints; j++)
-        {
-            double p[3];
-            points->GetPoint(j, p);
-
-            vtkIdType id = vNewPoints->InsertNextPoint(p);
-            container->GetPointIds()->InsertNextId(id);
-        }
-        vNewLines->InsertNextCell(container);
+      vtkIdType id = vNewPoints->InsertNextPoint((*it).GetDataPointer());
+      container->GetPointIds()->InsertNextId(id);
     }
+    vNewLines->InsertNextCell(container);
+  }
 
-    // initialize polydata
-    vNewPolyData->SetPoints(vNewPoints);
-    vNewPolyData->SetLines(vNewLines);
+  if (check)
+    for (int i=0; i<m_BuildFibersReady; i++)
+      m_Tractogram.pop_back();
+  m_BuildFibersReady = 0;
 
-    return vNewPolyData;
+  m_FiberPolyData->SetPoints(vNewPoints);
+  m_FiberPolyData->SetLines(vNewLines);
+  m_BuildFibersFinished = true;
 }
-template< class TTensorPixelType,
-          class TPDPixelType>
-void StreamlineTrackingFilter< TTensorPixelType,
-TPDPixelType>
-::AfterThreadedGenerateData()
+
+void StreamlineTrackingFilter::AfterTracking()
 {
+  if (m_Verbose)
+    std::cout << "                                                                                                     \r";
+  if (!m_UseOutputProbabilityMap)
+  {
+    MITK_INFO << "Reconstructed " << m_Tractogram.size() << " fibers.";
     MITK_INFO << "Generating polydata ";
-    m_FiberPolyData = m_PolyDataContainer->GetElement(0);
-    for (unsigned int i=1; i<this->GetNumberOfThreads(); i++)
-    {
-        m_FiberPolyData = AddPolyData(m_FiberPolyData, m_PolyDataContainer->GetElement(i));
-    }
-    MITK_INFO << "done";
+    BuildFibers(false);
+  }
+  else
+  {
+    itk::RescaleIntensityImageFilter< ItkDoubleImgType, ItkDoubleImgType >::Pointer filter = itk::RescaleIntensityImageFilter< ItkDoubleImgType, ItkDoubleImgType >::New();
+    filter->SetInput(m_OutputProbabilityMap);
+    filter->SetOutputMaximum(1.0);
+    filter->SetOutputMinimum(0.0);
+    filter->Update();
+    m_OutputProbabilityMap = filter->GetOutput();
+  }
+  MITK_INFO << "done";
+
+  m_EndTime = std::chrono::system_clock::now();
+  std::chrono::hours   hh = std::chrono::duration_cast<std::chrono::hours>(m_EndTime - m_StartTime);
+  std::chrono::minutes mm = std::chrono::duration_cast<std::chrono::minutes>(m_EndTime - m_StartTime);
+  std::chrono::seconds ss = std::chrono::duration_cast<std::chrono::seconds>(m_EndTime - m_StartTime);
+  mm %= 60;
+  ss %= 60;
+  MITK_INFO << "Tracking took " << hh.count() << "h, " << mm.count() << "m and " << ss.count() << "s";
+
+  m_SeedPoints.clear();
 }
 
-template< class TTensorPixelType,
-          class TPDPixelType>
-void StreamlineTrackingFilter< TTensorPixelType,
-TPDPixelType>
-::PrintSelf(std::ostream&, Indent) const
+void StreamlineTrackingFilter::SetDicomProperties(mitk::FiberBundle::Pointer fib)
 {
+  std::string model_code_value = "-";
+  std::string model_code_meaning = "-";
+  std::string algo_code_value = "-";
+  std::string algo_code_meaning = "-";
+
+  if (m_TrackingHandler->GetMode()==mitk::TrackingDataHandler::DETERMINISTIC && dynamic_cast<mitk::TrackingHandlerTensor*>(m_TrackingHandler) && !m_TrackingHandler->GetInterpolate())
+  {
+    algo_code_value = "sup181_ee04";
+    algo_code_meaning = "FACT";
+  }
+  else if (m_TrackingHandler->GetMode()==mitk::TrackingDataHandler::DETERMINISTIC)
+  {
+    algo_code_value = "sup181_ee01";
+    algo_code_meaning = "Deterministic";
+  }
+  else if (m_TrackingHandler->GetMode()==mitk::TrackingDataHandler::PROBABILISTIC)
+  {
+    algo_code_value = "sup181_ee02";
+    algo_code_meaning = "Probabilistic";
+  }
+
+  if (dynamic_cast<mitk::TrackingHandlerTensor*>(m_TrackingHandler) || (dynamic_cast<mitk::TrackingHandlerOdf*>(m_TrackingHandler) && dynamic_cast<mitk::TrackingHandlerOdf*>(m_TrackingHandler)->GetIsOdfFromTensor() ) )
+  {
+    if ( dynamic_cast<mitk::TrackingHandlerTensor*>(m_TrackingHandler) && dynamic_cast<mitk::TrackingHandlerTensor*>(m_TrackingHandler)->GetNumTensorImages()>1 )
+    {
+      model_code_value = "sup181_bb02";
+      model_code_meaning = "Multi Tensor";
+    }
+    else
+    {
+      model_code_value = "sup181_bb01";
+      model_code_meaning = "Single Tensor";
+    }
+  }
+  else if (dynamic_cast<mitk::TrackingHandlerRandomForest<6, 28>*>(m_TrackingHandler) || dynamic_cast<mitk::TrackingHandlerRandomForest<6, 100>*>(m_TrackingHandler))
+  {
+    model_code_value = "sup181_bb03";
+    model_code_meaning = "Model Free";
+  }
+  else if (dynamic_cast<mitk::TrackingHandlerOdf*>(m_TrackingHandler))
+  {
+    model_code_value = "-";
+    model_code_meaning = "ODF";
+  }
+  else if (dynamic_cast<mitk::TrackingHandlerPeaks*>(m_TrackingHandler))
+  {
+    model_code_value = "-";
+    model_code_meaning = "Peaks";
+  }
+
+  fib->SetProperty("DICOM.anatomy.value", mitk::StringProperty::New("T-A0095"));
+  fib->SetProperty("DICOM.anatomy.meaning", mitk::StringProperty::New("White matter of brain and spinal cord"));
+
+  fib->SetProperty("DICOM.algo_code.value", mitk::StringProperty::New(algo_code_value));
+  fib->SetProperty("DICOM.algo_code.meaning", mitk::StringProperty::New(algo_code_meaning));
+
+  fib->SetProperty("DICOM.model_code.value", mitk::StringProperty::New(model_code_value));
+  fib->SetProperty("DICOM.model_code.meaning", mitk::StringProperty::New(model_code_meaning));
 }
 
 }
-#endif // __itkDiffusionQballPrincipleDirectionsImageFilter_txx

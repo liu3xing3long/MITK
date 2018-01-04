@@ -18,6 +18,7 @@ QmitkLineEditLevelWindowWidget.cpp
 QmitkMemoryUsageIndicatorView.cpp
 QmitkMimeTypes.cpp
 QmitkNodeDescriptor.cpp
+QmitkColoredNodeDescriptor.cpp
 QmitkNodeDescriptorManager.cpp
 QmitkRenderWindowMenu.cpp
 QmitkProgressBar.cpp
@@ -34,6 +35,9 @@ QmitkStdMultiWidget.cpp
 QmitkMouseModeSwitcher.cpp
 QmitkDataStorageFilterProxyModel.cpp
 QmitkDataStorageComboBoxWithSelectNone.cpp
+QmitkPropertyItem.cpp
+QmitkPropertyItemDelegate.cpp
+QmitkPropertyItemModel.cpp
 )
 
 set(MOC_H_FILES
@@ -49,6 +53,7 @@ set(MOC_H_FILES
   include/QmitkLineEditLevelWindowWidget.h
   include/QmitkMemoryUsageIndicatorView.h
   include/QmitkNodeDescriptor.h
+  include/QmitkColoredNodeDescriptor.h
   include/QmitkNodeDescriptorManager.h
   include/QmitkRenderWindowMenu.h
   include/QmitkProgressBar.h
@@ -61,6 +66,8 @@ set(MOC_H_FILES
   include/QmitkStdMultiWidget.h
   include/QmitkMouseModeSwitcher.h
   include/QmitkDataStorageComboBoxWithSelectNone.h
+  include/QmitkPropertyItemDelegate.h
+  include/QmitkPropertyItemModel.h
 )
 
 set(UI_FILES

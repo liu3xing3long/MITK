@@ -14,7 +14,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 
 ===================================================================*/
 
-
 #ifndef QMITKRENDERINGMANAGERFACTORY_H_HEADER_INCLUDED_C135A197
 #define QMITKRENDERINGMANAGERFACTORY_H_HEADER_INCLUDED_C135A197
 
@@ -36,16 +35,13 @@ See LICENSE.txt or http://www.mitk.org for details.
 class MITKQTWIDGETS_EXPORT QmitkRenderingManagerFactory : public mitk::RenderingManagerFactory
 {
 public:
-
   QmitkRenderingManagerFactory();
 
-  ~QmitkRenderingManagerFactory();
+  ~QmitkRenderingManagerFactory() override;
 
-  virtual mitk::RenderingManager::Pointer CreateRenderingManager() const override;
+  mitk::RenderingManager::Pointer CreateRenderingManager() const override;
 
 private:
-
 };
-
 
 #endif

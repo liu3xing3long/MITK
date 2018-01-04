@@ -22,6 +22,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <itksys/SystemTools.hxx>
 #include <iostream>
 #include <itkMutexLockHolder.h>
+#include <mitkIOUtil.h>
 #include <mitkMicronTrackerTypeInformation.h>
 
 typedef itk::MutexLockHolder<itk::FastMutexLock> MutexLockHolder;
@@ -36,13 +37,10 @@ mitk::ClaronTrackingDevice::ClaronTrackingDevice(): mitk::TrackingDevice()
   m_ThreadID = 0;
 
   m_Device = mitk::ClaronInterface::New();
-  //############################# standard directories (from cmake) ##################################
+  //############################# standard directories ##################################
   if (m_Device->IsMicronTrackerInstalled())
   {
-#ifdef MITK_MICRON_TRACKER_TEMP_DIR
-    m_ToolfilesDir = std::string(MITK_MICRON_TRACKER_TEMP_DIR);
-    m_ToolfilesDir.append("/MT-tools");
-#endif
+    m_ToolfilesDir = mitk::IOUtil::CreateTemporaryDirectory();
 #ifdef MITK_MICRON_TRACKER_CALIBRATION_DIR
     m_CalibrationDir = std::string(MITK_MICRON_TRACKER_CALIBRATION_DIR);
 #endif
@@ -130,8 +128,6 @@ bool mitk::ClaronTrackingDevice::StartTracking()
   //restart the Microntracker, so it will load the new tool files
   m_Device->StopTracking();
   m_Device->Initialize(m_CalibrationDir,m_ToolfilesDir);
-
-  m_TrackingFinishedMutex->Unlock(); // transfer the execution rights to tracking thread
 
   if (m_Device->StartTracking())
   {

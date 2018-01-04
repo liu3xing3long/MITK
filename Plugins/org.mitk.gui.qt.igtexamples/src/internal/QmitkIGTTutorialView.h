@@ -22,7 +22,6 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <string>
 
 #include "ui_QmitkIGTTutorialViewControls.h"
-//#include "../IgttutorialDll.h"
 
 #include "mitkTrackingDeviceSource.h"
 #include "mitkNavigationDataObjectVisualizationFilter.h"
@@ -33,7 +32,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 * Any kind of navigation application will start with the connection to a tracking system
 * and as we do image guided procedures we want to show something on the screen. In this
 * tutorial we connect to the NDI Polaris tracking system (or alternatively use a virtual tracking device)
-* and we will show the movement of a tool as cone in the StdMultiWidget editor.
+* and we will show the movement of a tool as cone in the render window part.
 *
 * \sa also take a look at the CMakeLists.txt of this view to see how to
 *     link to the mitkIGT library.

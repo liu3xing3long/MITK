@@ -21,6 +21,9 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <itkMetaDataDictionary.h>
 #include <itkMetaDataObject.h>
 #include <mitkLogMacros.h>
+#include <dcmtk/dcmtract/trctractographyresults.h>
+#include <mitkDICOMDCMTKTagScanner.h>
+#include <itkGDCMImageIO.h>
 
 namespace mitk
 {
@@ -31,15 +34,13 @@ std::vector<CustomMimeType*> DiffusionIOMimeTypes::Get()
 
   // order matters here (descending rank for mime types)
 
-  mimeTypes.push_back(DWI_NRRD_MIMETYPE().Clone());
-  mimeTypes.push_back(DWI_NIFTI_MIMETYPE().Clone());
-  mimeTypes.push_back(DTI_MIMETYPE().Clone());
-  mimeTypes.push_back(QBI_MIMETYPE().Clone());
-
   mimeTypes.push_back(FIBERBUNDLE_VTK_MIMETYPE().Clone());
   mimeTypes.push_back(FIBERBUNDLE_TRK_MIMETYPE().Clone());
+  mimeTypes.push_back(FIBERBUNDLE_TCK_MIMETYPE().Clone());
+  mimeTypes.push_back(FIBERBUNDLE_DICOM_MIMETYPE().Clone());
 
   mimeTypes.push_back(CONNECTOMICS_MIMETYPE().Clone());
+  mimeTypes.push_back(TRACTOGRAPHYFOREST_MIMETYPE().Clone());
 
   mimeTypes.push_back(PLANARFIGURECOMPOSITE_MIMETYPE().Clone());
 
@@ -47,7 +48,6 @@ std::vector<CustomMimeType*> DiffusionIOMimeTypes::Get()
 }
 
 // Mime Types
-
 CustomMimeType DiffusionIOMimeTypes::PLANARFIGURECOMPOSITE_MIMETYPE()
 {
   CustomMimeType mimeType(PLANARFIGURECOMPOSITE_MIMETYPE_NAME());
@@ -58,6 +58,17 @@ CustomMimeType DiffusionIOMimeTypes::PLANARFIGURECOMPOSITE_MIMETYPE()
   return mimeType;
 }
 
+
+CustomMimeType DiffusionIOMimeTypes::TRACTOGRAPHYFOREST_MIMETYPE()
+{
+  CustomMimeType mimeType(TRACTOGRAPHYFOREST_MIMETYPE_NAME());
+  std::string category = "Tractography Forest";
+  mimeType.SetComment("Tractography Forest");
+  mimeType.SetCategory(category);
+  mimeType.AddExtension("rf");
+  return mimeType;
+}
+
 CustomMimeType DiffusionIOMimeTypes::FIBERBUNDLE_VTK_MIMETYPE()
 {
   CustomMimeType mimeType(FIBERBUNDLE_VTK_MIMETYPE_NAME());
@@ -65,7 +76,17 @@ CustomMimeType DiffusionIOMimeTypes::FIBERBUNDLE_VTK_MIMETYPE()
   mimeType.SetComment("VTK Fibers");
   mimeType.SetCategory(category);
   mimeType.AddExtension("fib");
-//  mimeType.AddExtension("vtk");
+  mimeType.AddExtension("vtk");
+  return mimeType;
+}
+
+CustomMimeType DiffusionIOMimeTypes::FIBERBUNDLE_TCK_MIMETYPE()
+{
+  CustomMimeType mimeType(FIBERBUNDLE_TCK_MIMETYPE_NAME());
+  std::string category = "MRtrix Fibers";
+  mimeType.SetComment("MRtrix Fibers");
+  mimeType.SetCategory(category);
+  mimeType.AddExtension("tck");
   return mimeType;
 }
 
@@ -79,171 +100,82 @@ CustomMimeType DiffusionIOMimeTypes::FIBERBUNDLE_TRK_MIMETYPE()
   return mimeType;
 }
 
-DiffusionIOMimeTypes::DiffusionImageNrrdMimeType::DiffusionImageNrrdMimeType()
-  : CustomMimeType(DWI_NRRD_MIMETYPE_NAME())
+DiffusionIOMimeTypes::FiberBundleDicomMimeType::FiberBundleDicomMimeType()
+  : CustomMimeType(FIBERBUNDLE_DICOM_MIMETYPE_NAME())
 {
-  std::string category = "Diffusion Weighted Image";
+  std::string category = "DICOM Fibers";
   this->SetCategory(category);
-  this->SetComment("Diffusion Weighted Images");
+  this->SetComment("DICOM Fibers");
 
-  this->AddExtension("dwi");
-  this->AddExtension("hdwi");
-  this->AddExtension("nrrd");
+  this->AddExtension("dcm");
+  this->AddExtension("DCM");
+  this->AddExtension("gdcm");
+  this->AddExtension("dc3");
+  this->AddExtension("DC3");
+  this->AddExtension("ima");
+  this->AddExtension("img");
 }
 
-bool DiffusionIOMimeTypes::DiffusionImageNrrdMimeType::AppliesTo(const std::string &path) const
+bool DiffusionIOMimeTypes::FiberBundleDicomMimeType::AppliesTo(const std::string &path) const
 {
-  bool canRead( CustomMimeType::AppliesTo(path) );
-
-  // fix for bug 18572
-  // Currently this function is called for writing as well as reading, in that case
-  // the image information can of course not be read
-  // This is a bug, this function should only be called for reading.
-  if( ! itksys::SystemTools::FileExists( path.c_str() ) )
+  try
   {
-    return canRead;
-  }
-  //end fix for bug 18572
-
-  std::string ext = this->GetExtension( path );
-  ext = itksys::SystemTools::LowerCase( ext );
-
-  // Simple NRRD files should only be considered for this mime type if they contain
-  // corresponding tags
-  if( ext == ".nrrd" )
-  {
-    itk::NrrdImageIO::Pointer io = itk::NrrdImageIO::New();
-    io->SetFileName(path);
-    try
+    std::ifstream myfile;
+    myfile.open (path, std::ios::binary);
+//    myfile.seekg (128);
+    char *buffer = new char [128];
+    myfile.read (buffer,128);
+    myfile.read (buffer,4);
+    if (std::string(buffer).compare("DICM")!=0)
     {
-      io->ReadImageInformation();
-
-      itk::MetaDataDictionary imgMetaDictionary = io->GetMetaDataDictionary();
-      std::vector<std::string> imgMetaKeys = imgMetaDictionary.GetKeys();
-      std::vector<std::string>::const_iterator itKey = imgMetaKeys.begin();
-      std::string metaString;
-
-      for (; itKey != imgMetaKeys.end(); itKey ++)
-      {
-        itk::ExposeMetaData<std::string> (imgMetaDictionary, *itKey, metaString);
-        if (itKey->find("modality") != std::string::npos)
-        {
-          if (metaString.find("DWMRI") != std::string::npos)
-          {
-            return canRead;
-          }
-        }
-      }
-
+      delete[] buffer;
+      return false;
     }
-    catch( const itk::ExceptionObject &e )
-    {
-      MITK_ERROR << "ITK Exception: " << e.what();
-    }
-    canRead = false;
-  }
+    delete[] buffer;
 
-  return canRead;
-}
+    mitk::DICOMDCMTKTagScanner::Pointer scanner = mitk::DICOMDCMTKTagScanner::New();
+    mitk::DICOMTag SOPInstanceUID(0x0008, 0x0016);
 
-DiffusionIOMimeTypes::DiffusionImageNrrdMimeType* DiffusionIOMimeTypes::DiffusionImageNrrdMimeType::Clone() const
-{
-  return new DiffusionImageNrrdMimeType(*this);
-}
+    mitk::StringList relevantFiles;
+    relevantFiles.push_back(path);
 
+    scanner->AddTag(SOPInstanceUID);
+    scanner->SetInputFiles(relevantFiles);
+    scanner->Scan();
+    mitk::DICOMTagCache::Pointer tagCache = scanner->GetScanCache();
 
-DiffusionIOMimeTypes::DiffusionImageNrrdMimeType DiffusionIOMimeTypes::DWI_NRRD_MIMETYPE()
-{
-  return DiffusionImageNrrdMimeType();
-}
+    mitk::DICOMImageFrameList imageFrameList = mitk::ConvertToDICOMImageFrameList(tagCache->GetFrameInfoList());
+    if (imageFrameList.empty())
+      return false;
 
-DiffusionIOMimeTypes::DiffusionImageNiftiMimeType::DiffusionImageNiftiMimeType()
-  : CustomMimeType(DWI_NIFTI_MIMETYPE_NAME())
-{
-  std::string category = "Diffusion Weighted Image";
-  this->SetCategory(category);
-  this->SetComment("Diffusion Weighted Images");
-  this->AddExtension("fsl");
-  this->AddExtension("fslgz");
-  this->AddExtension("nii");
-  this->AddExtension("nii.gz");
-}
+    mitk::DICOMImageFrameInfo *firstFrame = imageFrameList.begin()->GetPointer();
 
-bool DiffusionIOMimeTypes::DiffusionImageNiftiMimeType::AppliesTo(const std::string &path) const
-{
-  bool canRead(CustomMimeType::AppliesTo(path));
-
-  // fix for bug 18572
-  // Currently this function is called for writing as well as reading, in that case
-  // the image information can of course not be read
-  // This is a bug, this function should only be called for reading.
-  if (!itksys::SystemTools::FileExists(path.c_str()))
-  {
-    return canRead;
-  }
-  //end fix for bug 18572
-
-  std::string ext = this->GetExtension(path);
-  ext = itksys::SystemTools::LowerCase(ext);
-
-  // Nifti files should only be considered for this mime type if they are
-  // accompanied by bvecs and bvals files defining the diffusion information
-  if (ext == ".nii" || ext == ".nii.gz")
-  {
-    std::string base = itksys::SystemTools::GetFilenamePath(path) + "/"
-      + this->GetFilenameWithoutExtension(path);
-
-    if (itksys::SystemTools::FileExists(std::string(base + ".bvec").c_str())
-      && itksys::SystemTools::FileExists(std::string(base + ".bval").c_str())
-      )
-    {
-      return canRead;
+    std::string tag_value = tagCache->GetTagValue(firstFrame, SOPInstanceUID).value;
+    if (tag_value.empty()) {
+      return false;
     }
 
-    if (itksys::SystemTools::FileExists(std::string(base + ".bvecs").c_str())
-      && itksys::SystemTools::FileExists(std::string(base + ".bvals").c_str())
-      )
-    {
-      return canRead;
-    }
+    if (tag_value.compare(UID_TractographyResultsStorage)!=0)
+      return false;
 
-    canRead = false;
+    return true;
   }
-
-  return canRead;
+  catch (std::exception& e)
+  {
+    MITK_INFO << e.what();
+  }
+  return false;
 }
 
-DiffusionIOMimeTypes::DiffusionImageNiftiMimeType* DiffusionIOMimeTypes::DiffusionImageNiftiMimeType::Clone() const
+DiffusionIOMimeTypes::FiberBundleDicomMimeType* DiffusionIOMimeTypes::FiberBundleDicomMimeType::Clone() const
 {
-  return new DiffusionImageNiftiMimeType(*this);
+  return new FiberBundleDicomMimeType(*this);
 }
 
 
-DiffusionIOMimeTypes::DiffusionImageNiftiMimeType DiffusionIOMimeTypes::DWI_NIFTI_MIMETYPE()
+DiffusionIOMimeTypes::FiberBundleDicomMimeType DiffusionIOMimeTypes::FIBERBUNDLE_DICOM_MIMETYPE()
 {
-  return DiffusionImageNiftiMimeType();
-}
-
-CustomMimeType DiffusionIOMimeTypes::DTI_MIMETYPE()
-{
-  CustomMimeType mimeType(DTI_MIMETYPE_NAME());
-  std::string category = "Tensor Images";
-  mimeType.SetComment("Diffusion Tensor Images");
-  mimeType.SetCategory(category);
-  mimeType.AddExtension("dti");
-  mimeType.AddExtension("hdti");
-  return mimeType;
-}
-
-CustomMimeType DiffusionIOMimeTypes::QBI_MIMETYPE()
-{
-  CustomMimeType mimeType(QBI_MIMETYPE_NAME());
-  std::string category = "Q-Ball Images";
-  mimeType.SetComment("Diffusion Q-Ball Images");
-  mimeType.SetCategory(category);
-  mimeType.AddExtension("qbi");
-  mimeType.AddExtension("hqbi");
-  return mimeType;
+  return FiberBundleDicomMimeType();
 }
 
 CustomMimeType DiffusionIOMimeTypes::CONNECTOMICS_MIMETYPE()
@@ -277,39 +209,27 @@ CustomMimeType DiffusionIOMimeTypes::CONNECTOMICS_LIST_MIMETYPE()
 }
 
 // Names
-std::string DiffusionIOMimeTypes::DWI_NRRD_MIMETYPE_NAME()
-{
-  static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".dwi";
-  return name;
-}
-
-std::string DiffusionIOMimeTypes::DWI_NIFTI_MIMETYPE_NAME()
-{
-  static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".fsl";
-  return name;
-}
-
-std::string DiffusionIOMimeTypes::DTI_MIMETYPE_NAME()
-{
-  static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".dti";
-  return name;
-}
-
-std::string DiffusionIOMimeTypes::QBI_MIMETYPE_NAME()
-{
-  static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".qbi";
-  return name;
-}
-
 std::string DiffusionIOMimeTypes::FIBERBUNDLE_VTK_MIMETYPE_NAME()
 {
   static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".FiberBundle.vtk";
   return name;
 }
 
+std::string DiffusionIOMimeTypes::FIBERBUNDLE_TCK_MIMETYPE_NAME()
+{
+  static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".FiberBundle.tck";
+  return name;
+}
+
 std::string DiffusionIOMimeTypes::FIBERBUNDLE_TRK_MIMETYPE_NAME()
 {
   static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".FiberBundle.trk";
+  return name;
+}
+
+std::string DiffusionIOMimeTypes::FIBERBUNDLE_DICOM_MIMETYPE_NAME()
+{
+  static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".FiberBundle.dcm";
   return name;
 }
 
@@ -337,34 +257,16 @@ std::string DiffusionIOMimeTypes::PLANARFIGURECOMPOSITE_MIMETYPE_NAME()
   return name;
 }
 
+std::string DiffusionIOMimeTypes::TRACTOGRAPHYFOREST_MIMETYPE_NAME()
+{
+  static std::string name = IOMimeTypes::DEFAULT_BASE_NAME() + ".rf";
+  return name;
+}
+
 // Descriptions
 std::string DiffusionIOMimeTypes::FIBERBUNDLE_MIMETYPE_DESCRIPTION()
 {
   static std::string description = "Fiberbundles";
-  return description;
-}
-
-std::string DiffusionIOMimeTypes::DWI_NRRD_MIMETYPE_DESCRIPTION()
-{
-  static std::string description = "Diffusion Weighted Images";
-  return description;
-}
-
-std::string DiffusionIOMimeTypes::DWI_NIFTI_MIMETYPE_DESCRIPTION()
-{
-  static std::string description = "Diffusion Weighted Images";
-  return description;
-}
-
-std::string DiffusionIOMimeTypes::DTI_MIMETYPE_DESCRIPTION()
-{
-  static std::string description = "Diffusion Tensor Images";
-  return description;
-}
-
-std::string DiffusionIOMimeTypes::QBI_MIMETYPE_DESCRIPTION()
-{
-  static std::string description = "Q-Ball Images";
   return description;
 }
 
@@ -377,6 +279,12 @@ std::string DiffusionIOMimeTypes::CONNECTOMICS_MIMETYPE_DESCRIPTION()
 std::string DiffusionIOMimeTypes::PLANARFIGURECOMPOSITE_MIMETYPE_DESCRIPTION()
 {
   static std::string description = "Planar Figure Composite";
+  return description;
+}
+
+std::string DiffusionIOMimeTypes::TRACTOGRAPHYFOREST_MIMETYPE_DESCRIPTION()
+{
+  static std::string description = "Tractography Forest";
   return description;
 }
 

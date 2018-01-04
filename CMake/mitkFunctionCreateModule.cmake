@@ -12,7 +12,6 @@
 #!     PACKAGE_DEPENDS
 #!       PRIVATE Qt5|Xml+Networking
 #!       PUBLIC  ITK|Watershed
-#!     WARNINGS_AS_ERRORS
 #! \endcode
 #!
 #! The <moduleName> parameter specifies the name of the module which is used
@@ -81,7 +80,7 @@
 #! [PUBLIC|PRIVATE|INTERFACE] PACKAGE[|COMPONENT1[+COMPONENT2]...]
 #! \endverbatim
 #!        The default scope for package dependencies is PRIVATE.
-#! \param ADDITIONAL_LIBS List of addidtional private libraries linked to this module.
+#! \param ADDITIONAL_LIBS List of additional private libraries linked to this module.
 #!        The folder containing the library will be added to the global list of library search paths.
 #! \param CPP_FILES List of source files for this module. If the list is non-empty,
 #!        the module does not need to provide a files.cmake file or FILES_CMAKE argument.
@@ -95,7 +94,7 @@
 #!        symbols will be exported
 #! \param NO_INIT Do not create CppMicroServices initialization code
 #! \param NO_FEATURE_INFO Do not create a feature info by calling add_feature_info()
-#! \param WARNINGS_AS_ERRORS Treat compiler warnings as errors
+#! \param WARNINGS_NO_ERRORS Do not treat compiler warnings as errors
 #
 ##################################################################
 function(mitk_create_module)
@@ -131,7 +130,7 @@ function(mitk_create_module)
       NO_DEFAULT_INCLUDE_DIRS # do not add default include directories like "include" or "."
       NO_INIT                # do not create CppMicroServices initialization code
       NO_FEATURE_INFO        # do not create a feature info by calling add_feature_info()
-      WARNINGS_AS_ERRORS     # treat all compiler warnings as errors
+      WARNINGS_NO_ERRORS     # do not treat compiler warnings as errors
       EXECUTABLE             # create an executable; do not use directly, use mitk_create_executable() instead
       C_MODULE               # compile all source files as C sources
       CXX_MODULE             # compile all source files as C++ sources
@@ -191,6 +190,8 @@ function(mitk_create_module)
   if(NOT MODULE_SUBPROJECTS)
     if(MITK_DEFAULT_SUBPROJECTS)
       set(MODULE_SUBPROJECTS ${MITK_DEFAULT_SUBPROJECTS})
+    elseif(TARGET MITK-Modules)
+      set(MODULE_SUBPROJECTS MITK-Modules)
     endif()
   endif()
 
@@ -339,7 +340,7 @@ function(mitk_create_module)
       set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
     endif()
 
-    if(MODULE_WARNINGS_AS_ERRORS)
+    if(NOT MODULE_WARNINGS_NO_ERRORS)
       if(MSVC_VERSION)
         mitkFunctionCheckCAndCXXCompilerFlags("/WX" module_c_flags module_cxx_flags)
       else()
@@ -365,7 +366,7 @@ function(mitk_create_module)
         mitkFunctionCheckCAndCXXCompilerFlags("-Wno-error=gnu" module_c_flags module_cxx_flags)
         mitkFunctionCheckCAndCXXCompilerFlags("-Wno-error=inconsistent-missing-override" module_c_flags module_cxx_flags)
       endif()
-    endif(MODULE_WARNINGS_AS_ERRORS)
+    endif()
 
     if(MODULE_FORCE_STATIC)
       set(_STATIC STATIC)
@@ -404,20 +405,6 @@ function(mitk_create_module)
       endif()
     endif()
 
-    # Qt 4 case
-    if(MITK_USE_Qt4)
-      if(UI_FILES)
-        qt4_wrap_ui(Q${KITNAME}_GENERATED_UI_CPP ${UI_FILES})
-      endif()
-      if(MOC_H_FILES)
-        qt4_wrap_cpp(Q${KITNAME}_GENERATED_MOC_CPP ${MOC_H_FILES} OPTIONS -DBOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION)
-      endif()
-      if(QRC_FILES)
-        qt4_add_resources(Q${KITNAME}_GENERATED_QRC_CPP ${QRC_FILES})
-      endif()
-    endif()
-
-    # all the same for Qt 5
     if(MITK_USE_Qt5)
       if(UI_FILES)
         qt5_wrap_ui(Q${KITNAME}_GENERATED_UI_CPP ${UI_FILES})

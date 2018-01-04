@@ -83,7 +83,10 @@ void QmitkAddNewPropertyDialog::AddNewProperty()
       mitk::IPropertyPersistence* propertyPersistence = mitk::GetPropertyService<mitk::IPropertyPersistence>();
 
       if (propertyPersistence != nullptr)
-        propertyPersistence->AddInfo(m_Controls.nameLineEdit->text().toStdString(), mitk::PropertyPersistenceInfo::New());
+      {
+        mitk::PropertyPersistenceInfo::Pointer info = mitk::PropertyPersistenceInfo::New(m_Controls.nameLineEdit->text().toStdString());
+        propertyPersistence->AddInfo(info);
+      }
     }
   }
   else
@@ -123,7 +126,7 @@ mitk::BaseProperty::Pointer QmitkAddNewPropertyDialog::CreateProperty() const
     assert(false && "Property creation for selected type not implemented!");
   }
 
-  return NULL;
+  return nullptr;
 }
 
 bool QmitkAddNewPropertyDialog::ValidateValue()

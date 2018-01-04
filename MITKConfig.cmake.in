@@ -33,7 +33,9 @@ include(MacroParseArguments)
 include(mitkFunctionAddCustomModuleTest)
 include(mitkFunctionCheckMitkCompatibility)
 include(mitkFunctionCheckModuleDependencies)
+include(mitkFunctionConfigureVisualStudioUserProjectFile)
 include(mitkFunctionCreateBlueBerryApplication)
+include(mitkFunctionCreateCommandLineApp)
 include(mitkFunctionCreateModule)
 include(mitkFunctionCreatePlugin)
 include(mitkFunctionCreateProvisioningFile)
@@ -98,7 +100,10 @@ set(MITK_LEGACY_EXPORT_MACRO_NAME 1)
 
 set(DCMTK_CMAKE_DEBUG_POSTFIX @DCMTK_CMAKE_DEBUG_POSTFIX@)
 
-if(CMAKE_CURRENT_LIST_DIR STREQUAL MITK_BINARY_DIR)
+# Get the canonical name of the directory to avoid potential case mismatch,
+# e.g. in the drive letter on Windows.
+get_filename_component(CMAKE_CURRENT_LIST_DIR_REALPATH ${CMAKE_CURRENT_LIST_DIR} REALPATH)
+if(CMAKE_CURRENT_LIST_DIR_REALPATH STREQUAL MITK_BINARY_DIR)
   set(MITK_EXTERNAL_PROJECT_PREFIX @MITK_EXTERNAL_PROJECT_PREFIX@)
 endif()
 
@@ -119,16 +124,10 @@ list(APPEND CMAKE_PREFIX_PATH "@MITK_EXTERNAL_PROJECT_PREFIX@")
 # -----------------------------------------
 # Qt variables and dependencies
 
-set(MITK_USE_QT @MITK_USE_QT@)
-set(MITK_USE_Qt4 @MITK_USE_Qt4@)
 set(MITK_USE_Qt5 @MITK_USE_Qt5@)
+set(MITK_USE_Qt5_WebEngine @MITK_USE_Qt5_WebEngine@)
 
-set(MITK_DESIRED_QT_VERSION @DESIRED_QT_VERSION@)
-
-if(MITK_USE_Qt4)
-  set(MITK_QT4_MINIMUM_VERSION @MITK_QT4_MINIMUM_VERSION@)
-  find_package(Qt4 ${MITK_QT4_MINIMUM_VERSION} REQUIRED)
-elseif(MITK_USE_Qt5)
+if(MITK_USE_Qt5)
   set(MITK_QT5_MINIMUM_VERSION @MITK_QT5_MINIMUM_VERSION@)
   set(MITK_QT5_COMPONENTS @MITK_QT5_COMPONENTS@)
   mitkMacroFindDependency(Qt5 ${MITK_QT5_MINIMUM_VERSION} COMPONENTS ${MITK_QT5_COMPONENTS})
@@ -152,14 +151,11 @@ endif()
 # -----------------------------------------
 # Special Boost variables
 
-set(MITK_USE_Boost @MITK_USE_Boost@)
 set(MITK_USE_Boost_LIBRARIES @MITK_USE_Boost_LIBRARIES@)
 set(MITK_USE_SYSTEM_Boost @MITK_USE_SYSTEM_Boost@)
-if(MITK_USE_Boost)
-  set(BOOST_ROOT "@BOOST_ROOT@" CACHE PATH "")
-  set(BOOST_LIBRARYDIR "@BOOST_LIBRARYDIR@" CACHE PATH "")
-  set(Boost_ADDITIONAL_VERSIONS "1.59" "1.59.0")
-endif()
+set(BOOST_ROOT "@BOOST_ROOT@" CACHE PATH "")
+set(BOOST_LIBRARYDIR "@BOOST_LIBRARYDIR@" CACHE PATH "")
+set(Boost_ADDITIONAL_VERSIONS "1.65" "1.65.1")
 
 # We need this later for a DCMTK workaround
 set(_dcmtk_dir_orig "@DCMTK_DIR@")
@@ -192,30 +188,20 @@ if(MITK_USE_DCMTK)
 endif()
 
 # -----------------------------------------
-# Special handling for SOFA
-
-if(MITK_USE_SOFA)
-  # The SOFAConfig.cmake file does not provide exported targets or
-  # libraries with absolute paths, hence we need to make the link
-  # directories globally available until the SOFAConfig.cmake file
-  # supports a proper mechanism for handling targets.
-# find_package(SOFA PATHS ${SOFA_DIR} CONFIG REQUIRED)
-  link_directories(${SOFA_LIBRARY_DIRS})
-endif()
-
-# -----------------------------------------
-# Special handling for VMTK
-
-if(MITK_USE_VMTK)
-  # Same as SOFA above
-  link_directories(${VMTK_LIBRARY_DIRS})
+# Special handling for DCMQI
+if(MITK_USE_DCMQI)
+  # Due to the preferred CONFIG mode in find_package calls above,
+  # the DCMQIConfig.cmake file is read, which does not provide useful
+  # package information. We explictly need MODULE mode to find DCMQI.
+    # Help our FindDCMQI.cmake script find our super-build DCMQI
+  set(DCMQI_DIR ${MITK_EXTERNAL_PROJECT_PREFIX})
+  find_package(DCMQI REQUIRED)
 endif()
 
 # -----------------------------------------
 # Special handling for Boost
 
 if(MITK_USE_Boost)
-  # Same as SOFA above
   link_directories(${Boost_LIBRARY_DIRS})
 endif()
 
@@ -223,7 +209,6 @@ endif()
 # Special handling for OpenIGTLink
 
 if(MITK_USE_OpenIGTLink)
-  # Same as SOFA above
   link_directories(${OpenIGTLink_LIBRARY_DIRS})
 endif()
 

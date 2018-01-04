@@ -11,6 +11,10 @@
     <product name="MITK Workbench" application="org.mitk.qt.extapplication" />
   </extension>
 
+  <extension id="fiberfox" point="org.blueberry.core.runtime.products">
+    <product name="MITK Fiberfox" application="org.mitk.qt.extapplication" />
+  </extension>
+
   <extension point="org.blueberry.ui.intro">
     <intro id="org.mitk.qt.extapplicationintro"
       class="QmitkMitkWorkbenchIntroPart"
@@ -31,7 +35,7 @@
       id="org.mitk.mitkworkbench.perspectives.editor"
       name="Viewer"
       class="QmitkEditorPerspective"
-      icon="resources/icon.png">
+      icon="resources/perspectives/viewer_icon.png">
     </perspective>
     <perspective
       id="org.mitk.mitkworkbench.perspectives.visualization"
@@ -54,7 +58,7 @@
        name="Perspectives"
        category="org.mitk.GeneralPreferencePage"
        class="berry::ExtensionFactory:perspectivesPreferencePage">
-       <keywordReference id="org.blueberry.ui.perspectives"/>
+       <keywordreference id="org.blueberry.ui.perspectives"/>
      </page>
    </extension>
 </plugin>

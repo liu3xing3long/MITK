@@ -16,27 +16,22 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include <usModuleActivator.h>
 #include <usModuleContext.h>
 
-#include <mitkDiffusionImageNrrdReaderService.h>
-#include <mitkDiffusionImageNiftiReaderService.h>
-#include <mitkNrrdTensorImageReader.h>
-#include <mitkNrrdQBallImageReader.h>
 #include <mitkFiberBundleVtkReader.h>
+#include <mitkFiberBundleTckReader.h>
 #include <mitkFiberBundleTrackVisReader.h>
 #include <mitkConnectomicsNetworkReader.h>
 #include <mitkPlanarFigureCompositeReader.h>
+#include <mitkTractographyForestReader.h>
+#include <mitkFiberBundleDicomReader.h>
 
-#include <mitkDiffusionImageNrrdWriterService.h>
-#include <mitkDiffusionImageNiftiWriterService.h>
-#include <mitkNrrdTensorImageWriter.h>
-#include <mitkNrrdQBallImageWriter.h>
 #include <mitkFiberBundleVtkWriter.h>
 #include <mitkFiberBundleTrackVisWriter.h>
+#include <mitkFiberBundleDicomWriter.h>
 #include <mitkConnectomicsNetworkWriter.h>
 #include <mitkConnectomicsNetworkCSVWriter.h>
 #include <mitkConnectomicsNetworkMatrixWriter.h>
 #include <mitkPlanarFigureCompositeWriter.h>
-
-#include <mitkDiffusionPropertyHelper.h>
+#include <mitkTractographyForestWriter.h>
 
 #include <mitkCoreServices.h>
 #include <mitkIPropertyDescriptions.h>
@@ -55,50 +50,42 @@ namespace mitk
 
     void Load(us::ModuleContext* context) override
     {
-      us::ServiceProperties props;
-      props[ us::ServiceConstants::SERVICE_RANKING() ] = 10;
-
       m_MimeTypes = mitk::DiffusionIOMimeTypes::Get();
       for (std::vector<mitk::CustomMimeType*>::const_iterator mimeTypeIter = m_MimeTypes.begin(),
         iterEnd = m_MimeTypes.end(); mimeTypeIter != iterEnd; ++mimeTypeIter)
       {
+        us::ServiceProperties props;
+        mitk::CustomMimeType* mt = *mimeTypeIter;
+        if (mt->GetName()==mitk::DiffusionIOMimeTypes::FIBERBUNDLE_VTK_MIMETYPE_NAME())
+          props[ us::ServiceConstants::SERVICE_RANKING() ] = -1;
+        else if (mt->GetName()==mitk::DiffusionIOMimeTypes::FIBERBUNDLE_TRK_MIMETYPE_NAME())
+          props[ us::ServiceConstants::SERVICE_RANKING() ] = -2;
+        else if (mt->GetName()==mitk::DiffusionIOMimeTypes::FIBERBUNDLE_TCK_MIMETYPE_NAME())
+          props[ us::ServiceConstants::SERVICE_RANKING() ] = -3;
+        else if (mt->GetName()==mitk::DiffusionIOMimeTypes::FIBERBUNDLE_DICOM_MIMETYPE_NAME())
+          props[ us::ServiceConstants::SERVICE_RANKING() ] = -4;
+        else
+          props[ us::ServiceConstants::SERVICE_RANKING() ] = 10;
+
         context->RegisterService(*mimeTypeIter, props);
       }
 
-      m_DiffusionImageNrrdReaderService = new DiffusionImageNrrdReaderService();
-      m_DiffusionImageNiftiReaderService = new DiffusionImageNiftiReaderService();
-      m_NrrdTensorImageReader = new NrrdTensorImageReader();
-      m_NrrdQBallImageReader = new NrrdQBallImageReader();
       m_FiberBundleVtkReader = new FiberBundleVtkReader();
       m_FiberBundleTrackVisReader = new FiberBundleTrackVisReader();
+      m_FiberBundleTckReader = new FiberBundleTckReader();
+      m_FiberBundleDicomReader = new FiberBundleDicomReader();
       m_ConnectomicsNetworkReader = new ConnectomicsNetworkReader();
       m_PlanarFigureCompositeReader = new PlanarFigureCompositeReader();
+      m_TractographyForestReader = new TractographyForestReader();
 
-      m_DiffusionImageNrrdWriterService = new DiffusionImageNrrdWriterService();
-      m_DiffusionImageNiftiWriterService = new DiffusionImageNiftiWriterService();
-      m_NrrdTensorImageWriter = new NrrdTensorImageWriter();
-      m_NrrdQBallImageWriter = new NrrdQBallImageWriter();
       m_FiberBundleVtkWriter = new FiberBundleVtkWriter();
       m_FiberBundleTrackVisWriter = new FiberBundleTrackVisWriter();
+      m_FiberBundleDicomWriter = new FiberBundleDicomWriter();
       m_ConnectomicsNetworkWriter = new ConnectomicsNetworkWriter();
       m_ConnectomicsNetworkCSVWriter = new ConnectomicsNetworkCSVWriter();
       m_ConnectomicsNetworkMatrixWriter = new ConnectomicsNetworkMatrixWriter();
       m_PlanarFigureCompositeWriter = new PlanarFigureCompositeWriter();
-
-      //register relevant properties
-      //non-persistent properties
-      mitk::CoreServices::GetPropertyDescriptions()->AddDescription(mitk::DiffusionPropertyHelper::BVALUEMAPPROPERTYNAME, "This map stores which b values belong to which gradients.");
-      mitk::CoreServices::GetPropertyDescriptions()->AddDescription(mitk::DiffusionPropertyHelper::ORIGINALGRADIENTCONTAINERPROPERTYNAME, "The original gradients used during acquisition. This property may be empty.");
-      //persistent properties
-      mitk::CoreServices::GetPropertyDescriptions()->AddDescription(mitk::DiffusionPropertyHelper::REFERENCEBVALUEPROPERTYNAME, "The reference b value the gradients are normalized to.");
-      mitk::CoreServices::GetPropertyDescriptions()->AddDescription(mitk::DiffusionPropertyHelper::MEASUREMENTFRAMEPROPERTYNAME, "The measurment frame used during acquisition.");
-      mitk::CoreServices::GetPropertyDescriptions()->AddDescription(mitk::DiffusionPropertyHelper::GRADIENTCONTAINERPROPERTYNAME, "The gradients used during acquisition.");
-      mitk::CoreServices::GetPropertyDescriptions()->AddDescription(mitk::DiffusionPropertyHelper::MODALITY, "Defines the modality used for acquisition. DWMRI signifies diffusion weighted images.");
-
-      mitk::CoreServices::GetPropertyPersistence()->AddInfo(mitk::DiffusionPropertyHelper::REFERENCEBVALUEPROPERTYNAME, mitk::PropertyPersistenceInfo::New("DWMRI_b-value"));
-      mitk::CoreServices::GetPropertyPersistence()->AddInfo(mitk::DiffusionPropertyHelper::MEASUREMENTFRAMEPROPERTYNAME, mitk::PropertyPersistenceInfo::New("measurement frame"));
-      mitk::CoreServices::GetPropertyPersistence()->AddInfo(mitk::DiffusionPropertyHelper::GRADIENTCONTAINERPROPERTYNAME, mitk::PropertyPersistenceInfo::New("DWMRI_gradient"));
-      mitk::CoreServices::GetPropertyPersistence()->AddInfo(mitk::DiffusionPropertyHelper::MODALITY, mitk::PropertyPersistenceInfo::New("modality"));
+      m_TractographyForestWriter = new TractographyForestWriter();
     }
 
     void Unload(us::ModuleContext*) override
@@ -108,48 +95,42 @@ namespace mitk
         delete m_MimeTypes.at(loop);
       }
 
-      delete m_DiffusionImageNrrdReaderService;
-      delete m_DiffusionImageNiftiReaderService;
-      delete m_NrrdTensorImageReader;
-      delete m_NrrdQBallImageReader;
       delete m_FiberBundleVtkReader;
+      delete m_FiberBundleTckReader;
       delete m_FiberBundleTrackVisReader;
       delete m_ConnectomicsNetworkReader;
       delete m_PlanarFigureCompositeReader;
+      delete m_TractographyForestReader;
+      delete m_FiberBundleDicomReader;
 
-      delete m_DiffusionImageNrrdWriterService;
-      delete m_DiffusionImageNiftiWriterService;
-      delete m_NrrdTensorImageWriter;
-      delete m_NrrdQBallImageWriter;
+      delete m_FiberBundleDicomWriter;
       delete m_FiberBundleVtkWriter;
       delete m_FiberBundleTrackVisWriter;
       delete m_ConnectomicsNetworkWriter;
       delete m_ConnectomicsNetworkCSVWriter;
       delete m_ConnectomicsNetworkMatrixWriter;
       delete m_PlanarFigureCompositeWriter;
+      delete m_TractographyForestWriter;
     }
 
   private:
 
-    DiffusionImageNrrdReaderService * m_DiffusionImageNrrdReaderService;
-    DiffusionImageNiftiReaderService * m_DiffusionImageNiftiReaderService;
-    NrrdTensorImageReader * m_NrrdTensorImageReader;
-    NrrdQBallImageReader * m_NrrdQBallImageReader;
     FiberBundleVtkReader * m_FiberBundleVtkReader;
+    FiberBundleTckReader * m_FiberBundleTckReader;
     FiberBundleTrackVisReader * m_FiberBundleTrackVisReader;
+    FiberBundleDicomReader * m_FiberBundleDicomReader;
     ConnectomicsNetworkReader * m_ConnectomicsNetworkReader;
     PlanarFigureCompositeReader* m_PlanarFigureCompositeReader;
+    TractographyForestReader* m_TractographyForestReader;
 
-    DiffusionImageNrrdWriterService * m_DiffusionImageNrrdWriterService;
-    DiffusionImageNiftiWriterService * m_DiffusionImageNiftiWriterService;
-    NrrdTensorImageWriter * m_NrrdTensorImageWriter;
-    NrrdQBallImageWriter * m_NrrdQBallImageWriter;
+    FiberBundleDicomWriter * m_FiberBundleDicomWriter;
     FiberBundleVtkWriter * m_FiberBundleVtkWriter;
     FiberBundleTrackVisWriter * m_FiberBundleTrackVisWriter;
     ConnectomicsNetworkWriter * m_ConnectomicsNetworkWriter;
     ConnectomicsNetworkCSVWriter * m_ConnectomicsNetworkCSVWriter;
     ConnectomicsNetworkMatrixWriter * m_ConnectomicsNetworkMatrixWriter;
     PlanarFigureCompositeWriter* m_PlanarFigureCompositeWriter;
+    TractographyForestWriter* m_TractographyForestWriter;
 
     std::vector<mitk::CustomMimeType*> m_MimeTypes;
 

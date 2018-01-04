@@ -1,9 +1,11 @@
+mitkFunctionCheckCompilerFlags("-Wno-cpp" CMAKE_CXX_FLAGS)
+
 MITK_CREATE_MODULE( PythonService
   INCLUDE_DIRS
     PRIVATE src/PythonService
   DEPENDS PUBLIC MitkPython
   PACKAGE_DEPENDS
-    PUBLIC Qt4|QtGui Qt5|Widgets CTK|CTKScriptingPythonCore+CTKScriptingPythonWidgets
+    PUBLIC Qt5|Widgets CTK|CTKScriptingPythonCore+CTKScriptingPythonWidgets
     PRIVATE VTK|vtkPython+vtkWrappingPythonCore ${OpenCV_DEP}
     AUTOLOAD_WITH MitkPython
 )

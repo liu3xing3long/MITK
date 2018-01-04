@@ -36,9 +36,7 @@ class DataStorageService;
 class org_mitk_core_services_Activator : public QObject, public ctkPluginActivator
 {
   Q_OBJECT
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
   Q_PLUGIN_METADATA(IID "org_mitk_core_services")
-#endif
   Q_INTERFACES(ctkPluginActivator)
 
 public:
@@ -46,7 +44,7 @@ public:
   static const std::string PLUGIN_ID;
 
   org_mitk_core_services_Activator();
-  ~org_mitk_core_services_Activator();
+  ~org_mitk_core_services_Activator() override;
 
   void start(ctkPluginContext* context) override;
   void stop(ctkPluginContext* context) override;

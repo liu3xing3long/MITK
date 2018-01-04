@@ -137,71 +137,37 @@ static void TestMode4D()
   mitk::PointSet::Pointer pointSet = m_NavigationDataToPointSetFilter->GetOutput();
   pointSet->Update();
 
-  MITK_TEST_CONDITION( pointSet->GetPoint(0,0)[0] == 1.0 && pointSet->GetPoint(0,0)[1] == 2.0 && pointSet->GetPoint(0,0)[2] == 3.0 &&
-    pointSet->GetPoint(1,0)[0] == 4.0 && pointSet->GetPoint(1,0)[1] == 5.0 && pointSet->GetPoint(1,0)[2] == 6.0
-    , "Testing the conversion of navigation data object to one point set in Mode 4D in first timestep" );
+  MITK_TEST_CONDITION(pointSet->GetPoint(0, 0)[0] == 1.0 && pointSet->GetPoint(0, 0)[1] == 2.0 && pointSet->GetPoint(0, 0)[2] == 3.0 &&
+    pointSet->GetPoint(1, 0)[0] == 4.0 && pointSet->GetPoint(1, 0)[1] == 5.0 && pointSet->GetPoint(1, 0)[2] == 6.0
+    , "Testing the conversion of navigation data object to one point set in Mode 4D in first timestep");
 
   m_NavigationDataToPointSetFilter->SetInput(0, nd3);
   m_NavigationDataToPointSetFilter->SetInput(1, nd4);
   m_NavigationDataToPointSetFilter->Update();
   pointSet = m_NavigationDataToPointSetFilter->GetOutput();
 
-  MITK_TEST_CONDITION( pointSet->GetPoint(0,0)[0] == 1.0 && pointSet->GetPoint(0,0)[1] == 2.0 && pointSet->GetPoint(0,0)[2] == 3.0 &&
-    pointSet->GetPoint(1,0)[0] == 4.0 && pointSet->GetPoint(1,0)[1] == 5.0 && pointSet->GetPoint(1,0)[2] == 6.0 &&
-    pointSet->GetPoint(0,1)[0] == 7.0 && pointSet->GetPoint(0,1)[1] == 8.0 && pointSet->GetPoint(0,1)[2] == 9.0 &&
-    pointSet->GetPoint(1,1)[0] == 10.0 && pointSet->GetPoint(1,1)[1] == 11.0 && pointSet->GetPoint(1,1)[2] == 12.0
-    , "Testing the conversion of navigation data object to one point set in Mode 4D in second timestep" );
+  MITK_TEST_CONDITION(pointSet->GetPoint(0, 0)[0] == 1.0 && pointSet->GetPoint(0, 0)[1] == 2.0 && pointSet->GetPoint(0, 0)[2] == 3.0 &&
+    pointSet->GetPoint(1, 0)[0] == 4.0 && pointSet->GetPoint(1, 0)[1] == 5.0 && pointSet->GetPoint(1, 0)[2] == 6.0 &&
+    pointSet->GetPoint(0, 1)[0] == 7.0 && pointSet->GetPoint(0, 1)[1] == 8.0 && pointSet->GetPoint(0, 1)[2] == 9.0 &&
+    pointSet->GetPoint(1, 1)[0] == 10.0 && pointSet->GetPoint(1, 1)[1] == 11.0 && pointSet->GetPoint(1, 1)[2] == 12.0
+    , "Testing the conversion of navigation data object to one point set in Mode 4D in second timestep");
 
   m_NavigationDataToPointSetFilter->SetInput(0, nd3);
   m_NavigationDataToPointSetFilter->SetInput(1, nd4);
   pointSet = m_NavigationDataToPointSetFilter->GetOutput();
   pointSet->Update();
 
-  MITK_TEST_CONDITION( pointSet->GetPoint(0,0)[0] == 7.0 && pointSet->GetPoint(0,0)[1] == 8.0 && pointSet->GetPoint(0,0)[2] == 9.0 &&
-    pointSet->GetPoint(1,0)[0] == 10.0 && pointSet->GetPoint(1,0)[1] == 11.0 && pointSet->GetPoint(1,0)[2] == 12.0 &&
-    pointSet->GetPoint(0,1)[0] == 7.0 && pointSet->GetPoint(0,1)[1] == 8.0 && pointSet->GetPoint(0,1)[2] == 9.0 &&
-    pointSet->GetPoint(1,1)[0] == 10.0 && pointSet->GetPoint(1,1)[1] == 11.0 && pointSet->GetPoint(1,1)[2] == 12.0
-    , "Testing the correct ring buffer behavior" );
-}
-
-static void TestMode3DMean()
-{
-  Setup();
-  m_NavigationDataToPointSetFilter->SetOperationMode(mitk::NavigationDataToPointSetFilter::Mode3DMean);
-  int numberForMean = 5;
-  m_NavigationDataToPointSetFilter->SetNumberForMean(numberForMean);
-
-  MITK_TEST_CONDITION(mitk::Equal(m_NavigationDataToPointSetFilter->GetNumberForMean(), numberForMean), "Testing get/set for numberForMean");
-
-  mitk::NavigationDataSequentialPlayer::Pointer player = mitk::NavigationDataSequentialPlayer::New();
-
-  std::string file(MITK_IGT_DATA_DIR);
-  file.append("/NavigationDataTestData_2Tools.xml");
-
-  mitk::NavigationDataSet::Pointer dataset = dynamic_cast<mitk::NavigationDataSet*> (mitk::IOUtil::LoadBaseData(file).GetPointer());
-  player->SetNavigationDataSet(dataset);
-
-  for (unsigned int i = 0; i< player->GetNumberOfOutputs(); i++)
-  {
-    m_NavigationDataToPointSetFilter->SetInput(i, player->GetOutput(i));
-  }
-
-  mitk::PointSet::Pointer pointSet0 = m_NavigationDataToPointSetFilter->GetOutput();
-  mitk::PointSet::Pointer pointSet1 = m_NavigationDataToPointSetFilter->GetOutput(1);
-
-  m_NavigationDataToPointSetFilter->Update();
-
-  MITK_TEST_CONDITION(pointSet0->GetPoint(0)[0]==3.0 && pointSet0->GetPoint(0)[1]==2.0 && pointSet0->GetPoint(0)[2]==5.0,
-    "Testing the average of first input");
-
-  MITK_TEST_CONDITION(pointSet1->GetPoint(0)[0]==30.0 && pointSet1->GetPoint(0)[1]==20.0 && pointSet1->GetPoint(0)[2]==50.0,
-    "Testing the average of second input");
+  MITK_TEST_CONDITION(pointSet->GetPoint(0, 0)[0] == 7.0 && pointSet->GetPoint(0, 0)[1] == 8.0 && pointSet->GetPoint(0, 0)[2] == 9.0 &&
+    pointSet->GetPoint(1, 0)[0] == 10.0 && pointSet->GetPoint(1, 0)[1] == 11.0 && pointSet->GetPoint(1, 0)[2] == 12.0 &&
+    pointSet->GetPoint(0, 1)[0] == 7.0 && pointSet->GetPoint(0, 1)[1] == 8.0 && pointSet->GetPoint(0, 1)[2] == 9.0 &&
+    pointSet->GetPoint(1, 1)[0] == 10.0 && pointSet->GetPoint(1, 1)[1] == 11.0 && pointSet->GetPoint(1, 1)[2] == 12.0
+    , "Testing the correct ring buffer behavior");
 }
 
 static void NavigationDataToPointSetFilterContructor_DefaultCall_IsNotEmpty()
 {
   Setup();
-  MITK_TEST_CONDITION_REQUIRED(m_NavigationDataToPointSetFilter.IsNotNull(),"Testing instantiation");
+  MITK_TEST_CONDITION_REQUIRED(m_NavigationDataToPointSetFilter.IsNotNull(), "Testing instantiation");
   //I think this test is meaningless, because it will never ever fail. I keep it for know just to be save.
 }
 
@@ -221,8 +187,8 @@ static void NavigationDataToPointSetFilterSetInput_SimplePoint_EqualsGroundTruth
   m_NavigationDataToPointSetFilter->SetInput(nd_in);
   nd_out = m_NavigationDataToPointSetFilter->GetInput();
 
-  MITK_TEST_CONDITION( nd_out->GetPosition() == nd_in->GetPosition(),
-    "Testing get/set input" );
+  MITK_TEST_CONDITION(nd_out->GetPosition() == nd_in->GetPosition(),
+    "Testing get/set input");
 }
 
 int mitkNavigationDataToPointSetFilterTest(int /* argc */, char* /*argv*/[])
@@ -233,7 +199,7 @@ int mitkNavigationDataToPointSetFilterTest(int /* argc */, char* /*argv*/[])
   NavigationDataToPointSetFilterSetInput_SimplePoint_EqualsGroundTruth();
   TestMode3D();
   TestMode4D();
-//  TestMode3DMean(); //infinite loop in debug mode, see bug 17763
+  //  TestMode3DMean(); //infinite loop in debug mode, see bug 17763
 
   MITK_TEST_END();
 }

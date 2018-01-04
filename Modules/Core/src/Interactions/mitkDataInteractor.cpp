@@ -27,69 +27,63 @@ mitk::DataInteractor::DataInteractor()
 {
 }
 
-mitk::DataInteractor::NodeType mitk::DataInteractor::GetDataNode() const
+mitk::DataInteractor::~DataInteractor()
 {
-  return m_DataNode;
+  if (!m_DataNode.IsExpired())
+  {
+    auto dataNode = m_DataNode.Lock();
+
+    if (dataNode->GetDataInteractor() == this)
+      dataNode->SetDataInteractor(nullptr);
+  }
 }
 
-void mitk::DataInteractor::SetDataNode(DataNode::Pointer dataNode)
+mitk::DataNode *mitk::DataInteractor::GetDataNode() const
+{
+  return m_DataNode.Lock();
+}
+
+void mitk::DataInteractor::SetDataNode(DataNode *dataNode)
 {
   if (dataNode == m_DataNode)
     return;
 
-  if (m_DataNode.IsNotNull())
-  { // if DataInteractors' DataNode is set to null, the "old" DataNode has to be notified (else the Dispatcher won't be notified either)
-    m_DataNode->SetDataInteractor(NULL);
-  }
+  if (!m_DataNode.IsExpired())
+    m_DataNode.Lock()->SetDataInteractor(nullptr);
 
   m_DataNode = dataNode;
 
-  if (m_DataNode.IsNotNull())
-  {
-    m_DataNode->SetDataInteractor(this);
-  }
+  if (dataNode != nullptr)
+    m_DataNode.Lock()->SetDataInteractor(this);
 
-  // notify implementations ...
-  DataNodeChanged();
+  this->DataNodeChanged();
 }
-
-
 
 int mitk::DataInteractor::GetLayer() const
 {
   int layer = -1;
-  if (m_DataNode.IsNotNull())
-  {
-    m_DataNode->GetIntProperty("layer", layer);
-  }
-  return layer;
-}
 
-mitk::DataInteractor::~DataInteractor()
-{
-  if (m_DataNode.IsNotNull() )
-  {
-    // only reset if this interactor is still the current one
-    if (m_DataNode->GetDataInteractor() == this)
-      m_DataNode->SetDataInteractor(NULL);
-  }
+  if (!m_DataNode.IsExpired())
+    m_DataNode.Lock()->GetIntProperty("layer", layer);
+
+  return layer;
 }
 
 void mitk::DataInteractor::ConnectActionsAndFunctions()
 {
-  MITK_WARN<< "ConnectActionsAndFunctions in DataInteractor not implemented.\n DataInteractor will not be able to process any events.";
+  MITK_WARN << "DataInteractor::ConnectActionsAndFunctions() is not implemented.";
 }
 
 mitk::ProcessEventMode mitk::DataInteractor::GetMode() const
 {
-  if (GetCurrentState()->GetMode() == "PREFER_INPUT")
-  {
+  auto mode = this->GetCurrentState()->GetMode();
+
+  if (mode == "PREFER_INPUT")
     return PREFERINPUT;
-  }
-  if (GetCurrentState()->GetMode() == "GRAB_INPUT")
-  {
+
+  if (mode == "GRAB_INPUT")
     return GRABINPUT;
-  }
+
   return REGULAR;
 }
 
@@ -103,14 +97,6 @@ void mitk::DataInteractor::NotifyResultReady()
   this->GetDataNode()->InvokeEvent(ResultReady());
 }
 
-
-
-
 void mitk::DataInteractor::DataNodeChanged()
 {
-}
-
-void mitk::DataInteractor::DeletedNode()
-{
-  m_DataNode = nullptr;
 }

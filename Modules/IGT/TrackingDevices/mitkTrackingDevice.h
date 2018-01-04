@@ -23,6 +23,7 @@ See LICENSE.txt or http://www.mitk.org for details.
 #include "mitkCommon.h"
 #include "mitkTrackingTypes.h"
 #include "itkFastMutexLock.h"
+#include "mitkNavigationToolStorage.h"
 
 
 namespace mitk {
@@ -101,7 +102,7 @@ namespace mitk {
       * \brief Returns the tool with the given tool name
       *
       * Note: subclasses can and should implement optimized versions of this method
-      * \return the given tool or NULL if no tool with that name exists
+      * \return the given tool or nullptr if no tool with that name exists
       */
       virtual mitk::TrackingTool* GetToolByName(std::string name) const;
 
@@ -163,6 +164,17 @@ namespace mitk {
      */
     virtual bool IsDeviceInstalled();
 
+    /** @return Returns true if this device can autodetects its tools. */
+    virtual bool AutoDetectToolsAvailable();
+
+    /** Autodetects tools from this device and returns them as a navigation tool storage.
+     *  @return Returns the detected tools. Returns an empty storage if no tools are present
+     *          or if detection is not possible
+     */
+    virtual mitk::NavigationToolStorage::Pointer AutoDetectTools();
+
+    private:
+      TrackingDeviceState m_State; ///< current object state (Setup, Ready or Tracking)
     protected:
 
       /**
@@ -175,7 +187,7 @@ namespace mitk {
       virtual ~TrackingDevice();
 
     TrackingDeviceData m_Data; ///< current device Data
-      TrackingDeviceState m_State; ///< current object state (Setup, Ready or Tracking)
+
       bool m_StopTracking;       ///< signal stop to tracking thread
       itk::FastMutexLock::Pointer m_StopTrackingMutex; ///< mutex to control access to m_StopTracking
       itk::FastMutexLock::Pointer m_TrackingFinishedMutex; ///< mutex to manage control flow of StopTracking()
