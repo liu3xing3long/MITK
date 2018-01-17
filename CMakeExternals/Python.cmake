@@ -9,21 +9,22 @@ if( MITK_USE_Python AND NOT MITK_USE_SYSTEM_PYTHON )
 
   set(MITK_PYTHON_MAJOR_VERSION 2)
   set(MITK_PYTHON_MINOR_VERSION 7)
-  set(MITK_PYTHON_PATCH_VERSION 3)
+  set(MITK_PYTHON_PATCH_VERSION 13)
   set(PYTHON_SOURCE_PACKAGE Python-${MITK_PYTHON_MAJOR_VERSION}.${MITK_PYTHON_MINOR_VERSION}.${MITK_PYTHON_PATCH_VERSION})
   set(proj ${PYTHON_SOURCE_PACKAGE})
   set(proj_DEPENDENCIES )
   set(${proj}_DEPENDS ${proj})
 
   if(NOT DEFINED Python_DIR)
-
+  
     # download the source code
     ExternalProject_Add(${proj}
       LIST_SEPARATOR ${sep}
-      URL ${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/${PYTHON_SOURCE_PACKAGE}.tgz
-      URL_MD5  "2cf641732ac23b18d139be077bd906cd"
+      URL https://www.python.org/ftp/python/2.7.13/Python-2.7.13.tgz
+      #URL ${MITK_THIRDPARTY_DOWNLOAD_PREFIX_URL}/${PYTHON_SOURCE_PACKAGE}.tgz
+      #URL_MD5  "2cf641732ac23b18d139be077bd906cd"
       # patch the VS compiler config
-      PATCH_COMMAND ${PATCH_COMMAND} -N -p1 -i ${CMAKE_CURRENT_LIST_DIR}/Python-2.7.3.patch
+      # PATCH_COMMAND ${PATCH_COMMAND} -N -p1 -i ${CMAKE_CURRENT_LIST_DIR}/Python-2.7.3.patch
       CONFIGURE_COMMAND ""
       BUILD_COMMAND ""
       INSTALL_COMMAND ""

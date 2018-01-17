@@ -303,17 +303,17 @@ void QmitkStdMultiWidget::InitializeWidget()
 
   m_MouseModeSwitcher = mitk::MouseModeSwitcher::New();
 
-  // setup the department logo rendering
-  m_LogoRendering = mitk::LogoAnnotation::New();
-  mitk::BaseRenderer::Pointer renderer4 = mitk::BaseRenderer::GetInstance(mitkWidget4->GetRenderWindow());
-  m_LogoRendering->SetOpacity(0.5);
-  mitk::Point2D offset;
-  offset.Fill(0.03);
-  m_LogoRendering->SetOffsetVector(offset);
-  m_LogoRendering->SetRelativeSize(0.25);
-  m_LogoRendering->SetCornerPosition(1);
-  SetDepartmentLogo(":/org.mitk.gui.qt.stdmultiwidgeteditor/defaultWatermark.png");
-  mitk::ManualPlacementAnnotationRenderer::AddAnnotation(m_LogoRendering.GetPointer(), renderer4);
+  // // setup the department logo rendering
+  // m_LogoRendering = mitk::LogoAnnotation::New();
+  // mitk::BaseRenderer::Pointer renderer4 = mitk::BaseRenderer::GetInstance(mitkWidget4->GetRenderWindow());
+  // m_LogoRendering->SetOpacity(0.5);
+  // mitk::Point2D offset;
+  // offset.Fill(0.03);
+  // m_LogoRendering->SetOffsetVector(offset);
+  // m_LogoRendering->SetRelativeSize(0.25);
+  // m_LogoRendering->SetCornerPosition(1);
+  // SetDepartmentLogo(":/org.mitk.gui.qt.stdmultiwidgeteditor/defaultWatermark.png");
+  // mitk::ManualPlacementAnnotationRenderer::AddAnnotation(m_LogoRendering.GetPointer(), renderer4);
 }
 
 void QmitkStdMultiWidget::FillGradientBackgroundWithBlack()
@@ -1698,19 +1698,20 @@ void QmitkStdMultiWidget::DisableGradientBackground()
 
 void QmitkStdMultiWidget::EnableDepartmentLogo()
 {
-  m_LogoRendering->SetVisibility(true);
-  RequestUpdate();
+  // m_LogoRendering->SetVisibility(true);
+  // RequestUpdate();
 }
 
 void QmitkStdMultiWidget::DisableDepartmentLogo()
 {
-  m_LogoRendering->SetVisibility(false);
-  RequestUpdate();
+  // m_LogoRendering->SetVisibility(false);
+  // RequestUpdate();
 }
 
 bool QmitkStdMultiWidget::IsDepartmentLogoEnabled() const
 {
-  return m_LogoRendering->IsVisible();
+  // return m_LogoRendering->IsVisible();
+  return false;
 }
 
 void QmitkStdMultiWidget::SetWidgetPlaneVisibility(const char *widgetName, bool visible, mitk::BaseRenderer *renderer)
@@ -1818,17 +1819,18 @@ void QmitkStdMultiWidget::SetGradientBackgroundColors(const mitk::Color &upper, 
 
 void QmitkStdMultiWidget::SetDepartmentLogo(const char *path)
 {
-  QImage* qimage = new QImage(path);
-  vtkSmartPointer<vtkQImageToImageSource> qImageToVtk;
-  qImageToVtk = vtkSmartPointer<vtkQImageToImageSource>::New();
+  std::string logPath = std::string(path);
+  // QImage* qimage = new QImage(path);
+  // vtkSmartPointer<vtkQImageToImageSource> qImageToVtk;
+  // qImageToVtk = vtkSmartPointer<vtkQImageToImageSource>::New();
 
-  qImageToVtk->SetQImage(qimage);
-  qImageToVtk->Update();
+  // qImageToVtk->SetQImage(qimage);
+  // qImageToVtk->Update();
 
-  m_LogoRendering->SetLogoImage(qImageToVtk->GetOutput());
-  mitk::BaseRenderer *renderer = mitk::BaseRenderer::GetInstance(mitkWidget4->GetRenderWindow());
-  m_LogoRendering->Update(renderer);
-  RequestUpdate();
+  // m_LogoRendering->SetLogoImage(qImageToVtk->GetOutput());
+  // mitk::BaseRenderer *renderer = mitk::BaseRenderer::GetInstance(mitkWidget4->GetRenderWindow());
+  // m_LogoRendering->Update(renderer);
+  // RequestUpdate();
 }
 
 void QmitkStdMultiWidget::SetWidgetPlaneModeToSlicing(bool activate)
